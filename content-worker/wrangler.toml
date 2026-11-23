@@ -1,0 +1,12 @@
+# Separate origin that serves teacher-uploaded HTML/CSS/JS bundles.
+# Keeping it on its own *.workers.dev hostname isolates uploaded scripts from the admin panel.
+name = "study-hub-content"
+main = "src/index.ts"
+compatibility_date = "2025-09-01"
+workers_dev = true
+
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "study-hub-files"
+
+# Secret: SIGNING_KEY (same value as the Pages project)
