@@ -127,7 +127,7 @@ export function HomePage() {
           </div>
         </section>
       )}
-      <footer className="tp-muted pb-10 pt-14 text-center text-sm">{s.footerText || `©${new Date().getFullYear()} - ${s.siteName}`}</footer>
+      <footer className="tp-muted pb-10 pt-14 text-center text-sm">©2026 - Munjiba Miss</footer>
     </ThemedShell>
   );
 }

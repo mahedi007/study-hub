@@ -119,8 +119,7 @@ export function ThemedShell({
       <main className={`mx-auto ${width} px-5 pb-10 ${showHeader && headerStyle !== 'none' ? 'pt-2' : 'pt-8'}`}>{children}</main>
       {footer && (
         <footer className="tp-muted pb-10 pt-6 text-center text-sm">
-          ©{new Date().getFullYear()}
-          {teacher ? ` - ${teacher.name}` : ''}
+        ©2026 - Munjiba Miss
         </footer>
       )}
     </div>
