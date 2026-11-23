@@ -15,7 +15,7 @@ CONTENT_ORIGIN = ""
 [[d1_databases]]
 binding = "DB"
 database_name = "study-hub-db"
-database_id = "00000000-0000-0000-0000-000000000000"
+database_id = "ac82d719-9a02-4225-ab44-87e39fe7fd4c"
 migrations_dir = "migrations"
 
 [[r2_buckets]]
