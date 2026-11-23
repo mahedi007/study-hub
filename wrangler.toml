@@ -1,5 +1,5 @@
 # Cloudflare Pages project (SPA + Pages Functions API)
-name = "study-hub"
+name = "bangla-study-hub"
 pages_build_output_dir = "./dist"
 compatibility_date = "2025-09-01"
 
