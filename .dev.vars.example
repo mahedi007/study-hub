@@ -1,0 +1,7 @@
+AUTH_SECRET=change-me-to-a-long-random-string
+SIGNING_KEY=change-me-to-another-long-random-string
+SETUP_CODE=local-setup
+# GOOGLE_CLIENT_SECRET=
+# R2_ACCOUNT_ID=
+# R2_ACCESS_KEY_ID=
+# R2_SECRET_ACCESS_KEY=

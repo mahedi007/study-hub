@@ -1,0 +1,31 @@
+# Cloudflare Pages project (SPA + Pages Functions API)
+name = "study-hub"
+pages_build_output_dir = "./dist"
+compatibility_date = "2025-09-01"
+
+[vars]
+# The super admin. This email always has full admin rights and cannot be removed.
+SUPER_ADMIN_EMAIL = "mahedi.pro@gmail.com"
+# Google sign-in: create an OAuth client in Google Cloud Console (free) and paste the Client ID here.
+# The client secret goes in a secret (GOOGLE_CLIENT_SECRET). Leave empty to use email + password only.
+GOOGLE_CLIENT_ID = ""
+# Origin of the content worker that serves HTML lessons, e.g. "https://study-hub-content.<you>.workers.dev"
+CONTENT_ORIGIN = ""
+
+[[d1_databases]]
+binding = "DB"
+database_name = "study-hub-db"
+database_id = "00000000-0000-0000-0000-000000000000"
+migrations_dir = "migrations"
+
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "study-hub-files"
+
+# Secrets (set with `npx wrangler pages secret put NAME --project-name study-hub`, or in .dev.vars locally):
+#   AUTH_SECRET            required - random 32+ chars; signs login sessions and peppers password hashes. Never change it.
+#   SIGNING_KEY            required - random 32+ chars; signs file links. Same value in the content worker.
+#   GOOGLE_CLIENT_SECRET   optional - enables "Continue with Google"
+#   SETUP_CODE             optional - lets the super admin create a password account (instead of Google) on first setup
+#   R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME
+#                          optional - direct browser<->R2 uploads/downloads (files over 95 MB)
