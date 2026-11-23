@@ -3,7 +3,7 @@ import type { AppEnv, Env } from '../env';
 import { fail } from '../env';
 import { assetUrl, getSettings, mapAnnouncement, mapCollection, mapMaterial, now, today, verifyPasscode } from '../util';
 import { buildAccess, serveObject } from '../storage';
-import { assetKey, materialPrefix, safePath, verifyToken } from '../tokens';
+import { AUTO_HEIGHT, assetKey, materialPrefix, safePath, verifyToken } from '../tokens';
 import { defaultDesign, normalizeDesign } from '../../shared/design';
 import type { Material, PageDesign, PublicPageData, PublicTeacher, User } from '../../shared/types';
 
@@ -260,12 +260,18 @@ r.get('/bundle/b/:token/*', async (c) => {
   if (!rel || rel.endsWith('/')) rel += 'index.html';
   const path = safePath(rel);
   if (!path) fail(400, 'Bad path');
-  return serveObject(c.env, materialPrefix(id) + path, c.req.raw, {
+  const res = await serveObject(c.env, materialPrefix(id) + path, c.req.raw, {
     extraHeaders: {
       'Content-Security-Policy': 'sandbox allow-scripts allow-forms allow-popups allow-modals allow-downloads',
       'Access-Control-Allow-Origin': '*',
     },
   });
+  if (res.status !== 200 || !res.headers.get('Content-Type')?.startsWith('text/html')) return res;
+  const headers = new Headers(res.headers);
+  headers.delete('Content-Length');
+  return new HTMLRewriter()
+    .onDocument({ end(end) { end.append(AUTO_HEIGHT, { html: true }); } })
+    .transform(new Response(res.body, { status: 200, headers }));
 });
 
 r.get('/assets/:id', async (c) => {

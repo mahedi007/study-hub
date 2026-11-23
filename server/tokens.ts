@@ -53,5 +53,9 @@ export function safePath(p: string): string | null {
   return parts.length ? parts.join('/') : null;
 }
 
+/** Added to the end of every HTML lesson page: tells the parent page how tall the lesson is,
+ *  so it can be shown full-length like a normal page (no inner scrollbar, no frame). */
+export const AUTO_HEIGHT = `<script>(function(){var last=0;function s(){var b=document.body;if(!b)return;var h=Math.ceil(b.getBoundingClientRect().bottom+(parseFloat(getComputedStyle(b).marginBottom)||0)+(window.scrollY||0));if(Math.abs(h-last)>2){last=h;parent.postMessage({type:'studyhub:height',h:h},'*')}}addEventListener('load',s);if(window.ResizeObserver){new ResizeObserver(s).observe(document.body||document.documentElement)}setTimeout(s,300);setTimeout(s,1500)})()</script>`;
+
 export const materialPrefix = (materialId: string) => `m/${materialId}/files/`;
 export const assetKey = (ownerId: string, assetId: string) => `a/${ownerId}/${assetId}`;
