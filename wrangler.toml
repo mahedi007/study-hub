@@ -8,7 +8,7 @@ compatibility_date = "2025-09-01"
 SUPER_ADMIN_EMAIL = "mahedi.pro@gmail.com"
 # Google sign-in: create an OAuth client in Google Cloud Console (free) and paste the Client ID here.
 # The client secret goes in a secret (GOOGLE_CLIENT_SECRET). Leave empty to use email + password only.
-GOOGLE_CLIENT_ID = ""
+GOOGLE_CLIENT_ID = "744294085425-m0dtg50tnrgbk3ga381g47s5ua43v7b4.apps.googleusercontent.com"
 # Origin of the content worker that serves HTML lessons, e.g. "https://study-hub-content.<you>.workers.dev"
 CONTENT_ORIGIN = ""
 
