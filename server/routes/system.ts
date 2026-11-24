@@ -1,8 +1,8 @@
 import { Hono } from 'hono';
 import type { AppEnv } from '../env';
 import { fail } from '../env';
-import { createAuthToken, requireAdmin, superAdminEmail } from '../auth';
-import { assetUrl, audit, clampStr, getSettings, mapUser, newId, normEmail, now, uniqueHandle as uniqueHandleEnv, validEmail } from '../util';
+import { createAuthToken, hashPassword, requireAdmin, superAdminEmail, validatePassword } from '../auth';
+import { NO_EMAIL_DOMAIN, assetUrl, audit, clampStr, getSettings, mapUser, newId, normEmail, now, slugifyHandle, uniqueHandle as uniqueHandleEnv, validEmail } from '../util';
 import { deletePrefix } from '../storage';
 import { DEFAULT_SETTINGS } from '../../shared/design';
 
@@ -23,25 +23,58 @@ r.get('/users', async (c) => {
 
 const uniqueHandle = (c: any, base: string, excludeId?: string) => uniqueHandleEnv(c.env, base, excludeId);
 
+/** A username the admin typed must be free — never silently renamed. */
+async function claimUsername(c: any, raw: unknown, excludeId?: string): Promise<string> {
+  const handle = slugifyHandle(String(raw ?? ''));
+  if (handle.length < 3) fail(400, 'Username needs at least 3 letters or numbers (a-z, 0-9, -).');
+  const row = await c.env.DB.prepare(`SELECT id FROM users WHERE handle = ?`).bind(handle).first();
+  if (row && row.id !== excludeId) fail(409, `The username “${handle}” is already taken.`);
+  return handle;
+}
+
+async function claimEmail(c: any, raw: unknown, excludeId?: string): Promise<string> {
+  const email = normEmail(raw);
+  if (!validEmail(email)) fail(400, 'Enter a valid email');
+  const row = await c.env.DB.prepare(`SELECT id FROM users WHERE email = ?`).bind(email).first();
+  if (row && row.id !== excludeId) fail(409, 'A user with this email already exists');
+  return email;
+}
+
+/**
+ * Create a teacher. Two ways:
+ *  - with a password: the admin sets username + password and hands them over (no email needed);
+ *  - without one: an invite link is returned so the teacher picks their own password.
+ */
 r.post('/users', async (c) => {
   const actor = c.get('user');
   const b = await c.req.json();
-  const email = normEmail(b.email);
-  if (!validEmail(email)) fail(400, 'Enter a valid email');
-  const exists = await c.env.DB.prepare(`SELECT id FROM users WHERE email = ?`).bind(email).first();
-  if (exists) fail(409, 'A user with this email already exists');
   const settings = await getSettings(c.env);
   const id = newId();
-  const handle = await uniqueHandle(c, b.handle || b.name || email.split('@')[0]);
+  const password = b.password ? validatePassword(b.password) : null;
+  const handle = b.handle ? await claimUsername(c, b.handle) : await uniqueHandle(c, b.name || String(b.email ?? '').split('@')[0]);
+  let email: string;
+  if (String(b.email ?? '').trim()) email = await claimEmail(c, b.email);
+  else if (password) email = `${handle}-${id.slice(0, 6)}@${NO_EMAIL_DOMAIN}`;
+  else fail(400, 'Give an email (for an invite link) or set a password.');
   const quotaMb = b.quota_mb === undefined || b.quota_mb === '' ? settings.defaultQuotaMb : Math.max(0, Number(b.quota_mb) || 0);
   await c.env.DB.prepare(
-    `INSERT INTO users (id, email, name, handle, role, status, quota_bytes, created_at) VALUES (?, ?, ?, ?, ?, 'active', ?, ?)`,
+    `INSERT INTO users (id, email, name, handle, role, status, quota_bytes, password_hash, created_at) VALUES (?, ?, ?, ?, ?, 'active', ?, ?, ?)`,
   )
-    .bind(id, email, clampStr(b.name, 120) || email.split('@')[0], handle, b.role === 'admin' ? 'admin' : 'teacher', Math.round(quotaMb * 1048576), now())
+    .bind(
+      id,
+      email!,
+      clampStr(b.name, 120) || handle,
+      handle,
+      b.role === 'admin' ? 'admin' : 'teacher',
+      Math.round(quotaMb * 1048576),
+      password ? await hashPassword(c.env, password) : null,
+      now(),
+    )
     .run();
-  await audit(c.env, actor, 'user.invite', id, { email, role: b.role });
-  const token = await createAuthToken(c.env, id, 'invite', 14);
+  await audit(c.env, actor, password ? 'user.create' : 'user.invite', id, { handle, role: b.role });
   const row = await c.env.DB.prepare(`${USER_SELECT} WHERE u.id = ?`).bind(id).first();
+  if (password) return c.json({ user: mapUser(row!), link: null }, 201);
+  const token = await createAuthToken(c.env, id, 'invite', 14);
   return c.json({ user: mapUser(row!), link: `${new URL(c.req.url).origin}/admin/invite/${token}` }, 201);
 });
 
@@ -58,14 +91,32 @@ r.patch('/users/:id', async (c) => {
   if (b.role !== undefined && ['admin', 'teacher'].includes(b.role)) f.role = b.role;
   if (b.status !== undefined && ['active', 'disabled'].includes(b.status)) f.status = b.status;
   if (b.quota_mb !== undefined) f.quota_bytes = Math.round(Math.max(0, Number(b.quota_mb) || 0) * 1048576);
-  if (b.handle !== undefined) f.handle = await uniqueHandle(c, String(b.handle), id);
+  if (b.handle !== undefined && b.handle !== row!.handle) f.handle = await claimUsername(c, b.handle, id);
+  if (b.email !== undefined && normEmail(b.email) !== row!.email) {
+    if (row!.email === superAdminEmail(c.env)) fail(400, 'The super admin email is set in Cloudflare (SUPER_ADMIN_EMAIL), not here.');
+    if (!String(b.email).trim()) {
+      if (!row!.password_hash) fail(400, 'Set a password before removing the email, or they cannot sign in.');
+      f.email = `${f.handle ?? row!.handle}-${id.slice(0, 6)}@${NO_EMAIL_DOMAIN}`;
+    } else {
+      f.email = await claimEmail(c, b.email, id);
+    }
+  }
+  let passwordChanged = false;
+  if (b.password) {
+    f.password_hash = await hashPassword(c.env, validatePassword(b.password));
+    passwordChanged = true;
+  }
   const cols = Object.keys(f);
   if (cols.length) {
     await c.env.DB.prepare(`UPDATE users SET ${cols.map((k) => `${k} = ?`).join(', ')} WHERE id = ?`).bind(...cols.map((k) => f[k]), id).run();
   }
   // Disabling a user signs them out everywhere.
-  if (f.status === 'disabled') await c.env.DB.prepare(`UPDATE users SET session_version = session_version + 1 WHERE id = ?`).bind(id).run();
-  await audit(c.env, actor, 'user.update', id, f);
+  // A new password also signs them out of their other devices.
+  if (f.status === 'disabled' || passwordChanged) {
+    await c.env.DB.prepare(`UPDATE users SET session_version = session_version + 1 WHERE id = ?`).bind(id).run();
+  }
+  const { password_hash: _ph, ...logged } = f;
+  await audit(c.env, actor, passwordChanged ? 'user.password_set' : 'user.update', id, logged);
   const updated = await c.env.DB.prepare(`${USER_SELECT} WHERE u.id = ?`).bind(id).first();
   return c.json({ user: mapUser(updated!) });
 });

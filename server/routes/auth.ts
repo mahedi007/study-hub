@@ -48,16 +48,18 @@ r.get('/config', async (c) => {
 
 r.post('/login', async (c) => {
   const b = await c.req.json().catch(() => ({}));
+  // The sign-in box takes an email or a username.
   const email = normEmail(b.email);
   const password = String(b.password ?? '');
-  if (!validEmail(email) || !password) fail(400, 'ইমেইল ও পাসওয়ার্ড দিন (Enter email and password).');
+  const byUsername = !!email && !email.includes('@');
+  if (!email || (!byUsername && !validEmail(email)) || !password) fail(400, 'ইমেইল/ইউজারনেম ও পাসওয়ার্ড দিন (Enter your email or username and password).');
   await checkLock(c.env, email);
-  const row = await c.env.DB.prepare(`SELECT * FROM users WHERE email = ?`).bind(email).first<any>();
+  const row = await c.env.DB.prepare(byUsername ? `SELECT * FROM users WHERE handle = ?` : `SELECT * FROM users WHERE email = ?`).bind(email).first<any>();
   if (!row || !(await verifyPassword(c.env, password, row.password_hash))) {
     await recordFailure(c.env, email);
     if (row && !row.password_hash && row.google_sub) fail(401, 'এই অ্যাকাউন্টে Google দিয়ে লগইন করুন (This account uses Google sign-in).');
     if (row && !row.password_hash) fail(401, 'এখনো পাসওয়ার্ড সেট করা হয়নি — ইনভাইট লিংক ব্যবহার করুন (No password yet — use your invite link).');
-    fail(401, 'ইমেইল বা পাসওয়ার্ড ভুল (Wrong email or password).');
+    fail(401, 'ইমেইল/ইউজারনেম বা পাসওয়ার্ড ভুল (Wrong email/username or password).');
   }
   if (row.status === 'pending') fail(403, PENDING_MSG);
   if (row.status === 'disabled') fail(403, DISABLED_MSG);

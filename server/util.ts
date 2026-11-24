@@ -192,6 +192,9 @@ export async function uniqueHandle(env: Env, base: string, excludeId?: string): 
   return `${handle}-${newId().slice(0, 4)}`;
 }
 
+/** Teachers created with only a username get a placeholder address on this domain (never emailed). */
+export const NO_EMAIL_DOMAIN = 'no-email.local';
+
 export const normEmail = (v: unknown) => String(v ?? '').trim().toLowerCase();
 export const validEmail = (e: string) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e);
 

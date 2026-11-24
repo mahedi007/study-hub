@@ -1,12 +1,54 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check, Copy, ExternalLink, KeyRound, MessageCircle, MoreHorizontal, ShieldCheck, UserCheck, UserPlus, Users, X } from 'lucide-react';
+import { Check, Copy, ExternalLink, KeyRound, MessageCircle, MoreHorizontal, Pencil, RefreshCw, ShieldCheck, UserCheck, UserPlus, Users, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { adminApi } from '../../lib/api';
 import type { User } from '../../../shared/types';
 import { Badge, Button, Card, Field, Input, Menu, MenuItem, Modal, PageHeader, PageLoader, Progress, Select, useConfirm } from '../../components/ui';
 import { copyText, formatBytes, timeAgo } from '../../lib/format';
 import { useMe } from '../AdminApp';
+import { realEmail } from '../../../shared/design';
+
+/** A readable random password: no look-alike characters. */
+export function makePassword() {
+  const chars = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const bytes = crypto.getRandomValues(new Uint8Array(10));
+  return Array.from(bytes, (b) => chars[b % chars.length]).join('');
+}
+
+function PasswordInput({ value, onChange, autoFocus }: { value: string; onChange: (v: string) => void; autoFocus?: boolean }) {
+  return (
+    <div className="flex gap-2">
+      <Input value={value} onChange={(e) => onChange(e.target.value)} autoFocus={autoFocus} autoComplete="new-password" placeholder="At least 8 characters" className="font-mono" />
+      <Button type="button" icon={<RefreshCw className="h-4 w-4" />} onClick={() => onChange(makePassword())}>Generate</Button>
+    </div>
+  );
+}
+
+/** Shows the sign-in details once so the admin can hand them to the teacher. */
+function CredentialsModal({ name, username, password, onClose }: { name: string; username: string; password: string; onClose: () => void }) {
+  const [copied, setCopied] = useState(false);
+  const loginUrl = `${window.location.origin}/admin/login`;
+  const msg = `আসসালামু আলাইকুম ${name}! স্টাডি ম্যাটেরিয়ালসে লগইন করুন:\n${loginUrl}\nইউজারনেম: ${username}\nপাসওয়ার্ড: ${password}\n(লগইনের পর Profile থেকে পাসওয়ার্ড বদলে নিতে পারবেন)`;
+  return (
+    <Modal open onClose={onClose} title="Sign-in details" footer={<Button variant="primary" onClick={onClose}>Done</Button>}>
+      <p className="mb-3 text-sm text-stone-600">Give these to <b>{name}</b>. The password is not shown again — set a new one any time from the teacher's menu.</p>
+      <div className="space-y-1.5 rounded-xl border-[1.5px] border-stone-300 bg-stone-50 px-4 py-3 text-sm">
+        <div><span className="inline-block w-24 text-stone-500">Sign-in page</span> <code className="break-all">{loginUrl}</code></div>
+        <div><span className="inline-block w-24 text-stone-500">Username</span> <code className="font-bold">{username}</code></div>
+        <div><span className="inline-block w-24 text-stone-500">Password</span> <code className="font-bold">{password}</code></div>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <Button variant="primary" icon={copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />} onClick={async () => { await copyText(msg); setCopied(true); }}>
+          {copied ? 'Copied' : 'Copy message'}
+        </Button>
+        <a href={`https://wa.me/?text=${encodeURIComponent(msg)}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-full border-[1.5px] border-indigo-600 px-4 py-1.5 text-[15px] font-semibold text-indigo-600 hover:bg-indigo-50">
+          <MessageCircle className="h-4 w-4" /> Send on WhatsApp
+        </a>
+      </div>
+    </Modal>
+  );
+}
 
 type U = User & { avatar_url?: string | null };
 
@@ -55,7 +97,10 @@ export default function Teachers() {
   const { data, isLoading } = useQuery({ queryKey: ['users'], queryFn: () => adminApi<{ users: U[]; superAdminEmail: string }>('/system/users') });
   const [invite, setInvite] = useState(false);
   const [edit, setEdit] = useState<U | null>(null);
-  const [form, setForm] = useState({ email: '', name: '', handle: '', role: 'teacher', quota_mb: '' });
+  const blank = () => ({ email: '', name: '', handle: '', password: makePassword(), role: 'teacher', quota_mb: '' });
+  const [form, setForm] = useState(blank);
+  const [creds, setCreds] = useState<{ name: string; username: string; password: string } | null>(null);
+  const [pwUser, setPwUser] = useState<U | null>(null);
   const [busy, setBusy] = useState(false);
   const [del, setDel] = useState<U | null>(null);
   const [transferTo, setTransferTo] = useState('');
@@ -66,10 +111,11 @@ export default function Teachers() {
   const create = async () => {
     setBusy(true);
     try {
-      const res = await adminApi<{ user: User; link: string }>('/system/users', { method: 'POST', body: { ...form, quota_mb: form.quota_mb === '' ? 0 : Number(form.quota_mb) } });
+      const res = await adminApi<{ user: User; link: string | null }>('/system/users', { method: 'POST', body: { ...form, quota_mb: form.quota_mb === '' ? 0 : Number(form.quota_mb) } });
       setInvite(false);
-      setForm({ email: '', name: '', handle: '', role: 'teacher', quota_mb: '' });
-      setLink({ link: res.link, email: res.user.email, kind: 'invite' });
+      if (res.link) setLink({ link: res.link, email: res.user.email, kind: 'invite' });
+      else setCreds({ name: res.user.name, username: res.user.handle ?? '', password: form.password });
+      setForm(blank());
       refresh();
     } catch (e: any) {
       toast.error(e.message);
@@ -120,8 +166,8 @@ export default function Teachers() {
     <div>
       <PageHeader
         title="Teachers"
-        description="Invite teachers by email. They sign in with Google or with their own email and password. Storage is unlimited unless you set a limit."
-        actions={<Button variant="primary" icon={<UserPlus className="h-4 w-4" />} onClick={() => setInvite(true)}>Invite teacher</Button>}
+        description="Create a username and password for each teacher, or invite them by email. You can change any teacher's details or password here. Storage is unlimited unless you set a limit."
+        actions={<Button variant="primary" icon={<UserPlus className="h-4 w-4" />} onClick={() => { setForm(blank()); setInvite(true); }}>Add teacher</Button>}
       />
 
       <div className="mb-5 flex flex-wrap items-center gap-2 rounded-2xl border-[1.5px] border-stone-300 bg-white px-4 py-3 text-sm">
@@ -196,7 +242,11 @@ export default function Teachers() {
                           <div className="truncate font-semibold">
                             {u.name || '—'} {u.id === me.user.id && <span className="text-xs font-normal text-stone-500">(you)</span>}
                           </div>
-                          <div className="truncate text-xs text-stone-500">{u.email}</div>
+                          <div className="truncate text-xs text-stone-500">
+                            {u.handle && <span className="font-medium text-stone-700">@{u.handle}</span>}
+                            {u.handle && realEmail(u.email) && ' · '}
+                            {realEmail(u.email)}
+                          </div>
                         </div>
                       </div>
                     </td>
@@ -223,8 +273,9 @@ export default function Teachers() {
                     <td className="hidden px-2 py-3 text-xs text-stone-500 lg:table-cell">{timeAgo(u.last_login_at)}</td>
                     <td className="px-2 py-3">
                       <Menu trigger={<button className="rounded-full p-1.5 text-stone-500 hover:bg-stone-100" aria-label="Actions"><MoreHorizontal className="h-4 w-4" /></button>}>
-                        <MenuItem onClick={() => setEdit(u)}>Edit name, handle & storage limit</MenuItem>
-                        <MenuItem icon={<KeyRound className="h-4 w-4" />} onClick={() => makeLink(u)}>{u.has_password ? 'Create password reset link' : 'Copy invite link again'}</MenuItem>
+                        <MenuItem icon={<Pencil className="h-4 w-4" />} onClick={() => setEdit(u)}>Edit name, username, email & storage</MenuItem>
+                        {(!isSuper || u.id === me.user.id) && <MenuItem icon={<KeyRound className="h-4 w-4" />} onClick={() => setPwUser(u)}>Set a new password</MenuItem>}
+                        {realEmail(u.email) && !isSuper && <MenuItem onClick={() => makeLink(u)}>{u.has_password ? 'Send a reset link instead' : 'Copy invite link again'}</MenuItem>}
                         {u.handle && <MenuItem icon={<ExternalLink className="h-4 w-4" />} onClick={() => window.open(`/?teacher=${u.handle}`, '_blank')}>View their materials</MenuItem>}
                         {u.id !== me.user.id && !isSuper && (
                           <>
@@ -244,14 +295,26 @@ export default function Teachers() {
         {!users.length && <div className="py-10 text-center text-sm text-stone-500"><Users className="mx-auto mb-2 h-8 w-8" />No users</div>}
       </Card>
 
-      <Modal open={invite} onClose={() => setInvite(false)} title="Invite a teacher" footer={<><Button onClick={() => setInvite(false)}>Cancel</Button><Button variant="primary" loading={busy} onClick={create}>Create invite link</Button></>}>
+      <Modal
+        open={invite}
+        onClose={() => setInvite(false)}
+        title="Add a teacher"
+        footer={<><Button onClick={() => setInvite(false)}>Cancel</Button><Button variant="primary" loading={busy} onClick={create}>{form.password ? 'Create account' : 'Create invite link'}</Button></>}
+      >
         <div className="space-y-3">
-          <Field label="Email" hint="You'll get a one-time link to send them. If it's a Gmail address, they can also just click “Continue with Google”.">
-            <Input type="email" autoFocus value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="munjiba@gmail.com" />
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Name"><Input autoFocus value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Rony Ahmed" /></Field>
+            <Field label="Username" hint="For sign-in. a-z, 0-9 and -">
+              <Input value={form.handle} onChange={(e) => setForm({ ...form, handle: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') })} placeholder="rony" />
+            </Field>
+          </div>
+          <Field label="Password" hint="Clear it to send an email invite instead, so they choose their own.">
+            <PasswordInput value={form.password} onChange={(v) => setForm({ ...form, password: v })} />
+          </Field>
+          <Field label={form.password ? 'Email (optional)' : 'Email'} hint="Optional with a password. With a Gmail address they can also use “Continue with Google”.">
+            <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="rony@gmail.com" />
           </Field>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Name"><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Munjiba" /></Field>
-            <Field label="Short name" hint="Filter link: /?teacher=name"><Input value={form.handle} onChange={(e) => setForm({ ...form, handle: e.target.value })} placeholder="munjiba" /></Field>
             <Field label="Role">
               <Select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
                 <option value="teacher">Teacher</option>
@@ -264,12 +327,25 @@ export default function Teachers() {
       </Modal>
 
       {link && <LinkModal {...link} onClose={() => setLink(null)} />}
-      {edit && <EditUser user={edit} onClose={() => setEdit(null)} onSave={async (body) => { if (await patch(edit, body, 'Saved')) setEdit(null); }} />}
+      {edit && <EditUser user={edit} isSuper={edit.email === data?.superAdminEmail} onClose={() => setEdit(null)} onSave={async (body) => { if (await patch(edit, body, 'Saved')) setEdit(null); }} />}
+      {pwUser && (
+        <SetPassword
+          user={pwUser}
+          onClose={() => setPwUser(null)}
+          onSave={async (password) => {
+            if (await patch(pwUser, { password }, 'Password changed — they were signed out of other devices')) {
+              if (pwUser.id !== me.user.id) setCreds({ name: pwUser.name, username: pwUser.handle ?? realEmail(pwUser.email), password });
+              setPwUser(null);
+            }
+          }}
+        />
+      )}
+      {creds && <CredentialsModal {...creds} onClose={() => setCreds(null)} />}
 
       <Modal
         open={!!del}
         onClose={() => setDel(null)}
-        title={`Remove ${del?.email}?`}
+        title={`Remove ${del?.name || del?.handle}?`}
         footer={
           <>
             <Button onClick={() => setDel(null)}>Cancel</Button>
@@ -296,17 +372,40 @@ export default function Teachers() {
   );
 }
 
-function EditUser({ user, onClose, onSave }: { user: U; onClose: () => void; onSave: (b: Record<string, unknown>) => void }) {
+function EditUser({ user, isSuper, onClose, onSave }: { user: U; isSuper: boolean; onClose: () => void; onSave: (b: Record<string, unknown>) => void }) {
   const [name, setName] = useState(user.name);
   const [handle, setHandle] = useState(user.handle ?? '');
+  const [email, setEmail] = useState(realEmail(user.email));
   const [quota, setQuota] = useState(mbOf(user.quota_bytes));
+  const body: Record<string, unknown> = { name, handle, quota_mb: quota === '' ? 0 : Number(quota) };
+  if (!isSuper && email !== realEmail(user.email)) body.email = email;
   return (
-    <Modal open onClose={onClose} title={`Edit ${user.email}`} footer={<><Button onClick={onClose}>Cancel</Button><Button variant="primary" onClick={() => onSave({ name, handle, quota_mb: quota === '' ? 0 : Number(quota) })}>Save</Button></>}>
+    <Modal open onClose={onClose} title={`Edit ${user.name || user.handle}`} footer={<><Button onClick={onClose}>Cancel</Button><Button variant="primary" onClick={() => onSave(body)}>Save</Button></>}>
       <div className="space-y-3">
         <Field label="Name"><Input value={name} onChange={(e) => setName(e.target.value)} /></Field>
-        <Field label="Handle"><Input value={handle} onChange={(e) => setHandle(e.target.value)} /></Field>
+        <Field label="Username" hint={`Used to sign in, and for the filter link /?teacher=${handle || '…'}`}>
+          <Input value={handle} onChange={(e) => setHandle(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))} />
+        </Field>
+        <Field label="Email" hint={isSuper ? 'The super admin email is set in Cloudflare.' : 'Optional if they sign in with a username and password.'}>
+          <Input type="email" value={email} disabled={isSuper} onChange={(e) => setEmail(e.target.value)} placeholder="No email" />
+        </Field>
         <Field label="Storage limit (MB)" hint="Leave empty for no limit"><Input type="number" min={0} value={quota} onChange={(e) => setQuota(e.target.value)} placeholder="No limit" /></Field>
       </div>
+    </Modal>
+  );
+}
+
+function SetPassword({ user, onClose, onSave }: { user: U; onClose: () => void; onSave: (password: string) => void }) {
+  const [password, setPassword] = useState(makePassword());
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={`New password for ${user.name || user.handle}`}
+      footer={<><Button onClick={onClose}>Cancel</Button><Button variant="primary" disabled={password.length < 8} onClick={() => onSave(password)}>Save password</Button></>}
+    >
+      <p className="mb-3 text-sm text-stone-600">This replaces their current password and signs them out of other devices. You'll see the details to send them next.</p>
+      <Field label="New password"><PasswordInput value={password} onChange={setPassword} autoFocus /></Field>
     </Modal>
   );
 }

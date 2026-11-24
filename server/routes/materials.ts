@@ -36,6 +36,16 @@ function normalizeEmbed(url: string): string {
   return u;
 }
 
+/** Admins may upload for, or move a material to, another teacher. Everyone else owns what they create. */
+async function resolveOwner(c: any, wanted: unknown): Promise<string> {
+  const user = c.get('user');
+  if (!wanted || wanted === user.id) return user.id;
+  if (user.role !== 'admin') fail(403, 'Only admins can choose the teacher');
+  const row = await c.env.DB.prepare(`SELECT id FROM users WHERE id = ? AND status != 'pending'`).bind(String(wanted)).first();
+  if (!row) fail(400, 'That teacher does not exist');
+  return String(wanted);
+}
+
 function pickFields(body: any) {
   const out: Record<string, unknown> = {};
   if (body.title !== undefined) out.title = clampStr(body.title, 200) || 'Untitled';
@@ -60,7 +70,8 @@ function pickFields(body: any) {
 
 r.get('/materials', async (c) => {
   const user = c.get('user');
-  const all = user.role === 'admin' && c.req.query('scope') === 'all';
+  // Admins manage every teacher's materials from the same list (?scope=mine shows only their own).
+  const all = user.role === 'admin' && c.req.query('scope') !== 'mine';
   const stmt = all
     ? c.env.DB.prepare(
         `SELECT m.*, u.name AS owner_name, u.email AS owner_email, u.handle AS owner_handle
@@ -76,6 +87,7 @@ r.post('/materials', async (c) => {
   const body = await c.req.json();
   const kind: MaterialKind = KINDS.includes(body.kind) ? body.kind : 'file';
   const f = pickFields(body);
+  const ownerId = await resolveOwner(c, body.owner_id);
   const id = newId();
   const t = now();
   const ready = kind === 'embed' || kind === 'note' ? 1 : 0;
@@ -87,7 +99,7 @@ r.post('/materials', async (c) => {
     .bind(
       id,
       await uniqueSlug(c.env, body.slug ? String(body.slug) : String(f.title || 'material')),
-      user.id,
+      ownerId,
       (f.title as string) || 'Untitled',
       (f.description as string) ?? '',
       kind,
@@ -144,6 +156,10 @@ r.patch('/materials/:id', async (c) => {
     const taken = await c.env.DB.prepare(`SELECT id FROM materials WHERE slug = ? AND id != ?`).bind(slug, m.id).first();
     if (taken) fail(409, `“${slug}” is already used by another material. Try another link.`);
     f.slug = slug;
+  }
+  if (body.owner_id !== undefined && body.owner_id !== m.owner_id) {
+    f.owner_id = await resolveOwner(c, body.owner_id);
+    await audit(c.env, user, 'material.reassign', m.id, { from: m.owner_id, to: f.owner_id });
   }
   const keys = Object.keys(f);
   if (!keys.length) return c.json({ material: m });

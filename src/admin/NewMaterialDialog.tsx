@@ -14,6 +14,7 @@ import { Button, Field, Input, Modal, Progress, Select, Tabs, Textarea, Toggle, 
 import { KindIcon } from '../components/KindIcon';
 import { useMyMaterials } from '../components/MaterialPicker';
 import { useMe } from './AdminApp';
+import TeacherSelect from './TeacherSelect';
 
 type Mode = 'files' | 'folder' | 'embed' | 'note';
 
@@ -77,6 +78,7 @@ export default function NewMaterialDialog({ open, onClose, initialFiles }: { ope
   const [tags, setTags] = useState('');
   const [status, setStatus] = useState<Status>('published');
   const [allowDownload, setAllowDownload] = useState(true);
+  const [ownerId, setOwnerId] = useState(me.user.id);
 
   const [folderItems, setFolderItems] = useState<UploadItem[]>([]);
   const [folderTitle, setFolderTitle] = useState('');
@@ -137,7 +139,7 @@ export default function NewMaterialDialog({ open, onClose, initialFiles }: { ope
     ]);
   };
 
-  const meta = () => ({ subject, class_level: classLevel, tags: parseTags(tags), status, allow_download: allowDownload });
+  const meta = () => ({ subject, class_level: classLevel, tags: parseTags(tags), status, allow_download: allowDownload, owner_id: ownerId || undefined });
 
   const after = async (created: Material[]) => {
     await Promise.all([qc.invalidateQueries({ queryKey: ['materials'] }), qc.invalidateQueries({ queryKey: ['me'] }), qc.invalidateQueries({ queryKey: ['dashboard'] })]);
@@ -400,6 +402,7 @@ export default function NewMaterialDialog({ open, onClose, initialFiles }: { ope
       <div className={cx('mt-6 space-y-3 border-t border-stone-100 pt-4')}>
         <MetaFields subject={subject} setSubject={setSubject} classLevel={classLevel} setClassLevel={setClassLevel} tags={tags} setTags={setTags} />
         <div className="flex flex-wrap items-center gap-4">
+          <TeacherSelect value={ownerId} onChange={setOwnerId} className="w-72" />
           <Field label="Visibility" className="w-52">
             <Select value={status} onChange={(e) => setStatus(e.target.value as Status)}>
               <option value="published">Published on my page</option>

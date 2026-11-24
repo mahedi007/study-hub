@@ -93,8 +93,8 @@ export default function Dashboard() {
             <Link to="/admin/collections" className="flex items-center gap-1.5 rounded-lg bg-stone-50 px-3 py-2 text-xs font-medium hover:bg-stone-100">
               <Plus className="h-3.5 w-3.5" /> Collection
             </Link>
-            <a href={me.user.handle ? `/?teacher=${me.user.handle}` : '/'} target="_blank" rel="noreferrer" className="col-span-2 flex items-center gap-1.5 rounded-lg bg-stone-50 px-3 py-2 text-xs font-medium hover:bg-stone-100">
-              <Globe className="h-3.5 w-3.5" /> See my materials on the site
+            <a href={me.user.handle && !me.isSuperAdmin ? `/?teacher=${me.user.handle}` : '/'} target="_blank" rel="noreferrer" className="col-span-2 flex items-center gap-1.5 rounded-lg bg-stone-50 px-3 py-2 text-xs font-medium hover:bg-stone-100">
+              <Globe className="h-3.5 w-3.5" /> {me.isSuperAdmin ? 'View the site' : 'See my materials on the site'}
             </a>
           </div>
         </Card>

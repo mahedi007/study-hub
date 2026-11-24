@@ -67,23 +67,26 @@ export async function siteInfo(env: Env): Promise<SiteInfo> {
 
 export async function buildSiteData(env: Env): Promise<PublicPageData> {
   const t = now();
+  // The super admin runs the system and is not a teacher: their own uploads, collections
+  // and profile never appear on the site (assign a material to a teacher to publish it).
+  const sa = superAdminEmail(env);
   const [mats, cols, anns, teachers, site] = await Promise.all([
-    env.DB.prepare(`${MATERIAL_WITH_OWNER} WHERE m.status = 'published' AND m.ready = 1 AND u.status = 'active' ORDER BY m.created_at DESC LIMIT 3000`).all(),
+    env.DB.prepare(`${MATERIAL_WITH_OWNER} WHERE m.status = 'published' AND m.ready = 1 AND u.status = 'active' AND u.email != ? ORDER BY m.created_at DESC LIMIT 3000`).bind(sa).all(),
     env.DB.prepare(
       `SELECT c.*, u.name AS owner_name, u.handle AS owner_handle,
          (SELECT COUNT(*) FROM collection_items ci JOIN materials m ON m.id = ci.material_id WHERE ci.collection_id = c.id AND m.status != 'draft') AS item_count
-       FROM collections c JOIN users u ON u.id = c.owner_id WHERE c.status = 'published' AND u.status = 'active' ORDER BY c.updated_at DESC`,
-    ).all<any>(),
+       FROM collections c JOIN users u ON u.id = c.owner_id WHERE c.status = 'published' AND u.status = 'active' AND u.email != ? ORDER BY c.updated_at DESC`,
+    ).bind(sa).all<any>(),
     env.DB.prepare(
-      `SELECT a.*, u.name AS owner_name FROM announcements a JOIN users u ON u.id = a.owner_id
+      `SELECT a.*, CASE WHEN u.email = ? THEN '' ELSE u.name END AS owner_name FROM announcements a JOIN users u ON u.id = a.owner_id
        WHERE u.status = 'active' AND (a.expires_at IS NULL OR a.expires_at > ?) ORDER BY a.pinned DESC, a.created_at DESC LIMIT 50`,
     )
-      .bind(t)
+      .bind(sa, t)
       .all<any>(),
     env.DB.prepare(
       `SELECT u.*, (SELECT COUNT(*) FROM materials m WHERE m.owner_id = u.id AND m.status = 'published' AND m.ready = 1) AS material_count
-       FROM users u WHERE u.status = 'active' AND u.handle IS NOT NULL ORDER BY material_count DESC, u.name`,
-    ).all<any>(),
+       FROM users u WHERE u.status = 'active' AND u.handle IS NOT NULL AND u.email != ? ORDER BY material_count DESC, u.name`,
+    ).bind(sa).all<any>(),
     siteInfo(env),
   ]);
   const materials = mats.results.map(mapMaterial).map(listMaterial);

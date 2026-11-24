@@ -18,6 +18,7 @@ import AudioPlayer from '../public/viewers/AudioPlayer';
 import { MetaFields, parseTags } from './NewMaterialDialog';
 import ShareDialog from './ShareDialog';
 import { useMe } from './AdminApp';
+import TeacherSelect from './TeacherSelect';
 
 type Detail = {
   material: Material;
@@ -37,7 +38,7 @@ export default function MaterialEdit() {
   const confirm = useConfirm();
   const { data, isLoading, error, refetch } = useQuery({ queryKey: ['material', id], queryFn: () => adminApi<Detail>(`/materials/${id}`) });
 
-  const [form, setForm] = useState({ title: '', description: '', subject: '', class_level: '', tags: '', status: 'draft' as Status, allow_download: true, cover_asset: null as string | null, embed_url: '', body_md: '', entry_path: '', icon: '', slug: '' });
+  const [form, setForm] = useState({ title: '', description: '', subject: '', class_level: '', tags: '', status: 'draft' as Status, allow_download: true, cover_asset: null as string | null, embed_url: '', body_md: '', entry_path: '', icon: '', slug: '', owner_id: '' });
   const audioInput = useRef<HTMLInputElement>(null);
   const [audioUp, setAudioUp] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
@@ -62,6 +63,7 @@ export default function MaterialEdit() {
     entry_path: m.entry_path ?? '',
     icon: m.icon ?? '',
     slug: m.slug ?? '',
+    owner_id: m.owner_id,
   });
 
   useEffect(() => {
@@ -105,6 +107,7 @@ export default function MaterialEdit() {
         icon: form.icon,
         slug: form.slug.trim().toLowerCase(),
       };
+      if (form.owner_id && form.owner_id !== m.owner_id) body.owner_id = form.owner_id;
       if (m.kind === 'embed') body.embed_url = form.embed_url;
       if (m.kind === 'note') body.body_md = form.body_md;
       if (m.kind === 'html' && form.entry_path) body.entry_path = form.entry_path;
@@ -260,11 +263,12 @@ export default function MaterialEdit() {
 
           <Card className="space-y-4 p-5">
             <h2 className="serif text-lg font-bold text-indigo-600">Visibility</h2>
+            <TeacherSelect value={form.owner_id} onChange={(v) => set('owner_id', v)} />
             <Field label="Who can see it">
               <Select value={form.status} onChange={(e) => set('status', e.target.value as Status)}>
-                <option value="published">Published — listed on my page</option>
-                <option value="unlisted">Link only — hidden from my page, open via share links / collections</option>
-                <option value="draft">Draft — only me</option>
+                <option value="published">Published — listed on the site</option>
+                <option value="unlisted">Link only — not listed, opens by its link / collections</option>
+                <option value="draft">Draft — only the teacher and admins</option>
               </Select>
             </Field>
             <Toggle checked={form.allow_download} onChange={(v) => set('allow_download', v)} label="Show a download button to students" />

@@ -364,6 +364,9 @@ const BN_DIGITS = '০১২৩৪৫৬৭৮৯';
 export const bnNum = (v: number | string) => String(v).replace(/[0-9]/g, (d) => BN_DIGITS[Number(d)]);
 
 /** URL-safe topic slug from a title (ASCII only; Bangla-only titles fall back to "material"). */
+/** Accounts made with only a username carry a placeholder email; hide it in the UI. */
+export const realEmail = (email: string | null | undefined) => (email && !email.endsWith('@no-email.local') ? email : '');
+
 export function slugify(input: string): string {
   return (
     input

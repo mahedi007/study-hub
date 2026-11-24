@@ -1,3 +1,4 @@
+import { realEmail } from '../../shared/design';
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -183,7 +184,11 @@ export function LoginPage() {
       )}
       <form onSubmit={submit} className="flex flex-col gap-4">
         {mode === 'register' && <FieldInput label="তোমার নাম" value={name} onChange={setName} autoFocus autoComplete="name" />}
-        <FieldInput label="ইমেইল" type="email" value={email} onChange={setEmail} autoFocus={mode === 'login'} autoComplete="email" />
+        {mode === 'login' ? (
+          <FieldInput label="ইমেইল বা ইউজারনেম" type="text" value={email} onChange={setEmail} autoFocus autoComplete="username" />
+        ) : (
+          <FieldInput label="ইমেইল" type="email" value={email} onChange={setEmail} autoComplete="email" />
+        )}
         <FieldInput
           label="পাসওয়ার্ড"
           type="password"
@@ -243,7 +248,7 @@ export function InvitePage() {
   return (
     <AuthCard title={invite ? 'স্বাগতম! অ্যাকাউন্ট চালু করো' : 'নতুন পাসওয়ার্ড দাও'}>
       <Ok>
-        {invite ? 'তোমাকে শিক্ষক হিসেবে আমন্ত্রণ জানানো হয়েছে:' : 'পাসওয়ার্ড রিসেট করা হবে:'} <b>{data.email}</b>
+        {invite ? 'তোমাকে শিক্ষক হিসেবে আমন্ত্রণ জানানো হয়েছে:' : 'পাসওয়ার্ড রিসেট করা হবে:'} <b>{realEmail(data.email) || data.name}</b>
       </Ok>
       {err && <Err>{err}</Err>}
       {invite && cfg?.google && (

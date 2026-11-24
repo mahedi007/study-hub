@@ -1,5 +1,6 @@
+import { realEmail } from '../../shared/design';
 import { createContext, useContext, useState, type ReactNode } from 'react';
-import { NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import { Navigate, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ExternalLink,
@@ -97,7 +98,6 @@ function Sidebar({ me, onNavigate }: { me: Me; onNavigate?: () => void }) {
             <div className="px-3.5 pb-1 pt-5 text-[11px] font-bold uppercase tracking-widest text-gold">Administration</div>
             <NavItem to="/admin/design" icon={<Palette className={ic} />}>Home page design</NavItem>
             <NavItem to="/admin/system/teachers" icon={<Users className={ic} />}>Teachers</NavItem>
-            <NavItem to="/admin/system/materials" icon={<ShieldCheck className={ic} />}>All materials</NavItem>
             <NavItem to="/admin/system/storage" icon={<HardDrive className={ic} />}>Storage & usage</NavItem>
             <NavItem to="/admin/system/settings" icon={<Settings className={ic} />}>Site settings</NavItem>
             <NavItem to="/admin/system/audit" icon={<ScrollText className={ic} />}>Activity log</NavItem>
@@ -125,7 +125,7 @@ function Sidebar({ me, onNavigate }: { me: Me; onNavigate?: () => void }) {
           )}
           <div className="min-w-0 flex-1">
             <div className="truncate text-sm font-semibold">{me.user.name}</div>
-            <div className="truncate text-xs text-[#f4eee1]/60">{me.user.email}</div>
+            <div className="truncate text-xs text-[#f4eee1]/60">{realEmail(me.user.email) || `@${me.user.handle}`}</div>
           </div>
           <button onClick={logout} className="rounded-full p-2 text-[#f4eee1]/70 hover:bg-white/10 hover:text-[#f4eee1]" title="Sign out">
             <LogOut className="h-4 w-4" />
@@ -139,8 +139,6 @@ function Sidebar({ me, onNavigate }: { me: Me; onNavigate?: () => void }) {
 function SetupWarnings({ me }: { me: Me }) {
   const items: string[] = [];
   if (!me.signingKey) items.push('SIGNING_KEY secret is missing — students cannot open uploaded files until it is set.');
-  if (me.user.role === 'admin' && !me.capabilities.contentOrigin)
-    items.push('CONTENT_ORIGIN is not set — HTML lessons are served from this site inside a strict sandbox (no localStorage). Deploy the content worker for full compatibility.');
   if (!items.length) return null;
   return (
     <div className="mb-6 space-y-2">
@@ -225,7 +223,7 @@ function Workspace() {
                   <>
                     <Route path="design" element={<PageDesigner />} />
                     <Route path="system/teachers" element={<Teachers />} />
-                    <Route path="system/materials" element={<Materials scope="all" />} />
+                    <Route path="system/materials" element={<Navigate to="/admin/materials" replace />} />
                     <Route path="system/storage" element={<Storage />} />
                     <Route path="system/settings" element={<SiteSettingsPage />} />
                     <Route path="system/audit" element={<Audit />} />

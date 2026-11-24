@@ -1,3 +1,4 @@
+import { realEmail } from '../../shared/design';
 import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Save } from 'lucide-react';
@@ -54,14 +55,14 @@ export default function Profile() {
           <ImagePicker label="Photo" value={form.avatar_asset} onChange={(v) => setForm({ ...form, avatar_asset: v })} compact />
           <div className="flex-1 space-y-3">
             <Field label="Display name"><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
-            <Field label="Short name for links" hint={`Students see only your materials at ${window.location.origin}/?teacher=${form.handle || '…'}`}>
+            <Field label="Username" hint={`You sign in with it, and students see only your materials at ${window.location.origin}/?teacher=${form.handle || "…"}`}>
               <Input value={form.handle} onChange={(e) => setForm({ ...form, handle: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') })} />
             </Field>
           </div>
         </div>
         <Field label="Short bio"><Textarea rows={3} value={form.bio} onChange={(e) => setForm({ ...form, bio: e.target.value })} /></Field>
         <div className="flex items-center justify-between border-t border-stone-100 pt-4 text-sm text-stone-500">
-          <span>{me.user.email} · {me.isSuperAdmin ? 'super admin' : me.user.role} · {formatBytes(me.user.used_bytes)} used{me.user.quota_bytes ? ` of ${formatBytes(me.user.quota_bytes)}` : ''}</span>
+          <span>{realEmail(me.user.email) || `@${me.user.handle}`} · {me.isSuperAdmin ? 'super admin' : me.user.role} · {formatBytes(me.user.used_bytes)} used{me.user.quota_bytes ? ` of ${formatBytes(me.user.quota_bytes)}` : ''}</span>
           <Button variant="primary" icon={<Save className="h-4 w-4" />} loading={busy} onClick={save}>Save</Button>
         </div>
       </Card>

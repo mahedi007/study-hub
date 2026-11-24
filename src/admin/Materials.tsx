@@ -19,8 +19,10 @@ export default function Materials({ scope }: { scope?: 'all' }) {
   const navigate = useNavigate();
   const confirm = useConfirm();
   const [params, setParams] = useSearchParams();
-  const key = scope === 'all' ? ['materials', 'all'] : ['materials'];
-  const { data, isLoading } = useQuery({ queryKey: key, queryFn: () => adminApi<{ materials: Material[] }>(`/materials${scope === 'all' ? '?scope=all' : ''}`) });
+  // Admins manage every teacher's materials here; teachers see their own.
+  const showAll = scope === 'all' || me.user.role === 'admin';
+  const key = ['materials'];
+  const { data, isLoading } = useQuery({ queryKey: key, queryFn: () => adminApi<{ materials: Material[] }>('/materials') });
 
   const [q, setQ] = useState('');
   const [status, setStatus] = useState('');
@@ -98,7 +100,7 @@ export default function Materials({ scope }: { scope?: 'all' }) {
   const actions = (m: Material) => (
     <Menu trigger={<button className="rounded-md p-1.5 text-stone-500 hover:bg-stone-100" aria-label="Actions"><MoreHorizontal className="h-4 w-4" /></button>}>
       <MenuItem icon={<Pencil className="h-4 w-4" />} onClick={() => navigate(`/admin/materials/${m.id}`)}>Edit</MenuItem>
-      {scope !== 'all' && <MenuItem icon={<Share2 className="h-4 w-4" />} onClick={() => setShare(m)}>Share link…</MenuItem>}
+      {m.owner_id === me.user.id && <MenuItem icon={<Share2 className="h-4 w-4" />} onClick={() => setShare(m)}>Share link…</MenuItem>}
       {m.status === 'published' && (
         <MenuItem icon={<Copy className="h-4 w-4" />} onClick={async () => { await copyText(publicUrl(m)); toast.success('Public link copied'); }}>Copy public link</MenuItem>
       )}
@@ -115,9 +117,9 @@ export default function Materials({ scope }: { scope?: 'all' }) {
 
   return (
     <div
-      onDragOver={(e) => { if (scope !== 'all' && e.dataTransfer.types.includes('Files')) { e.preventDefault(); setDragging(true); } }}
+      onDragOver={(e) => { if (e.dataTransfer.types.includes('Files')) { e.preventDefault(); setDragging(true); } }}
       onDragLeave={(e) => { if (e.currentTarget === e.target) setDragging(false); }}
-      onDrop={(e) => { if (scope === 'all') return; e.preventDefault(); setDragging(false); const files = Array.from(e.dataTransfer.files); if (files.length) { setDropped(files); setNewOpen(true); } }}
+      onDrop={(e) => { e.preventDefault(); setDragging(false); const files = Array.from(e.dataTransfer.files); if (files.length) { setDropped(files); setNewOpen(true); } }}
       className="relative"
     >
       {dragging && (
@@ -129,16 +131,16 @@ export default function Materials({ scope }: { scope?: 'all' }) {
         </div>
       )}
       <PageHeader
-        title={scope === 'all' ? 'All materials' : 'Materials'}
-        description={scope === 'all' ? 'Moderate everything uploaded by every teacher.' : 'Upload, organise and share your study materials. Tip: drag files anywhere on this page.'}
-        actions={scope !== 'all' && <Button variant="primary" icon={<Plus className="h-4 w-4" />} onClick={() => { setDropped(undefined); setNewOpen(true); }}>Add material</Button>}
+        title="Materials"
+        description={showAll ? 'Every teacher’s materials — edit, move to another teacher or delete anything. Tip: drag files anywhere on this page to upload.' : 'Upload, organise and share your study materials. Tip: drag files anywhere on this page.'}
+        actions={<Button variant="primary" icon={<Plus className="h-4 w-4" />} onClick={() => { setDropped(undefined); setNewOpen(true); }}>Add material</Button>}
       />
 
       {!all.length ? (
         <EmptyState
           icon={<FileStack className="h-10 w-10" />}
           title="No materials yet"
-          action={scope !== 'all' && <Button variant="primary" icon={<Upload className="h-4 w-4" />} onClick={() => setNewOpen(true)}>Upload your first material</Button>}
+          action={<Button variant="primary" icon={<Upload className="h-4 w-4" />} onClick={() => setNewOpen(true)}>Upload your first material</Button>}
         >
           PDFs, Word files, slides, audio, video, whole HTML folders, YouTube links or text notes.
         </EmptyState>
@@ -165,7 +167,7 @@ export default function Materials({ scope }: { scope?: 'all' }) {
                 {subjects.map((s) => <option key={s}>{s}</option>)}
               </Select>
             )}
-            {scope === 'all' && (
+            {showAll && (
               <Select value={owner} onChange={(e) => setOwner(e.target.value)} className="w-auto">
                 <option value="">Any teacher</option>
                 {owners.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
@@ -198,7 +200,7 @@ export default function Materials({ scope }: { scope?: 'all' }) {
                     <tr>
                       <th className="w-10 px-3 py-2.5"><input type="checkbox" checked={allSelected} onChange={toggleAll} /></th>
                       <th className="px-2 py-2.5 font-medium">Title</th>
-                      {scope === 'all' && <th className="px-2 py-2.5 font-medium">Teacher</th>}
+                      {showAll && <th className="px-2 py-2.5 font-medium">Teacher</th>}
                       <th className="hidden px-2 py-2.5 font-medium md:table-cell">Subject / class</th>
                       <th className="px-2 py-2.5 font-medium">Status</th>
                       <th className="hidden px-2 py-2.5 text-right font-medium sm:table-cell">Size</th>
@@ -218,7 +220,7 @@ export default function Materials({ scope }: { scope?: 'all' }) {
                             {!m.ready && <span className="shrink-0 rounded bg-red-50 px-1.5 text-[10px] font-medium text-red-600">no file</span>}
                           </Link>
                         </td>
-                        {scope === 'all' && <td className="px-2 py-2.5 text-stone-600">{m.owner_name || m.owner_email}</td>}
+                        {showAll && <td className="px-2 py-2.5 text-stone-600">{m.owner_name || m.owner_email}{me.isSuperAdmin && m.owner_id === me.user.id && <span className="ml-1 text-xs text-amber-700">(you · not on site)</span>}</td>}
                         <td className="hidden px-2 py-2.5 text-stone-600 md:table-cell">{[m.subject, m.class_level].filter(Boolean).join(' · ') || '—'}</td>
                         <td className="px-2 py-2.5"><StatusBadge status={m.status} /></td>
                         <td className="hidden px-2 py-2.5 text-right tabular-nums text-stone-600 sm:table-cell">{m.size_bytes ? formatBytes(m.size_bytes) : '—'}</td>
@@ -247,6 +249,7 @@ export default function Materials({ scope }: { scope?: 'all' }) {
                         <StatusBadge status={m.status} />
                         <span>{m.view_count} views</span>
                       </div>
+                      {showAll && <div className="mt-1 truncate text-xs text-stone-600">{m.owner_name || m.owner_email}</div>}
                     </div>
                     {actions(m)}
                   </div>
