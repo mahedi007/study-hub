@@ -139,6 +139,20 @@ async function pageContext(env: Env) {
 
 // ---------- Home ----------
 
+/** One home-page visit per browser session (the app calls this once), for the admin dashboard. */
+r.post('/public/visit', async (c) => {
+  const p = c.env.DB.prepare(`INSERT INTO daily_views (owner_id, day, views) VALUES ('_site', ?, 1) ON CONFLICT(owner_id, day) DO UPDATE SET views = views + 1`)
+    .bind(today())
+    .run()
+    .catch(() => undefined);
+  try {
+    c.executionCtx.waitUntil(p);
+  } catch {
+    await p;
+  }
+  return c.json({ ok: true });
+});
+
 r.get('/public/home', async (c) => {
   const [design, data] = await Promise.all([siteDesign(c.env), buildSiteData(c.env)]);
   return c.json({ design, data });

@@ -341,8 +341,53 @@ body {
   .tp-prose th, .tp-prose td { border: 1px solid var(--tp-border); padding: 0.4em 0.6em; }
   .tp-prose hr { border-color: var(--tp-border); margin: 1.5em 0; }
 
+
+  /* ---------- Hero showcase (right side of the editorial hero) ---------- */
+  .tp-showcase { position: relative; height: 440px; width: 100%; max-width: 480px; margin-left: auto; }
+  .tp-showcase-blob {
+    position: absolute; right: 4%; top: 50%; width: 340px; height: 340px; translate: 0 -50%;
+    border-radius: 46% 54% 52% 48% / 50% 44% 56% 50%;
+    background: color-mix(in srgb, var(--tp-accent) 32%, transparent);
+    animation: tp-morph 14s ease-in-out infinite;
+  }
+  .tp-showcase-ring {
+    position: absolute; right: -2%; top: 50%; width: 400px; height: 400px; translate: 0 -50%;
+    border-radius: 9999px; border: 1.5px dashed color-mix(in srgb, var(--tp-ink) 35%, transparent);
+    animation: tp-spin 60s linear infinite;
+  }
+  .tp-showcase-spark { position: absolute; color: var(--tp-accent); font-size: 22px; line-height: 1; animation: tp-twinkle 3.2s ease-in-out infinite; }
+  .tp-showcase-item { position: absolute; width: min(300px, 78%); animation: tp-float 6s ease-in-out infinite; }
+  .tp-showcase-item > * { rotate: var(--r, 0deg); transition: rotate 0.25s ease, transform 0.2s ease, box-shadow 0.2s ease; }
+  .tp-showcase-item:hover { z-index: 20; }
+  .tp-showcase-item:hover > * { rotate: 0deg; }
+  .tp-showcase-icon {
+    display: flex; height: 54px; width: 54px; flex-shrink: 0; align-items: center; justify-content: center;
+    border-radius: calc(var(--tp-radius) * 0.6); background: var(--tp-primary); font-size: 28px;
+  }
+  .tp-showcase-pill {
+    position: absolute; display: inline-flex; align-items: center; gap: 0.5rem; white-space: nowrap;
+    border-radius: 9999px; padding: 0.45rem 1rem; font-weight: 700; font-size: 15px;
+    border: 1.5px solid var(--tp-ink); box-shadow: 3px 3px 0 var(--tp-ink);
+    animation: tp-float 7s ease-in-out infinite;
+  }
+  .tp-avatar-stack { display: flex; }
+  .tp-avatar-stack > * {
+    height: 30px; width: 30px; margin-left: -8px; border-radius: 9999px; border: 1.5px solid var(--tp-ink);
+    background: var(--tp-accent); color: var(--tp-ink); display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 800; object-fit: cover;
+  }
+  .tp-avatar-stack > *:first-child { margin-left: 0; }
+
   .docx-host .docx-wrapper { background: transparent !important; padding: 0 !important; }
   .docx-host .docx-wrapper > section.docx { box-shadow: 0 2px 12px rgb(0 0 0 / 0.12); margin-bottom: 1rem !important; max-width: 100%; }
+}
+
+@keyframes tp-float { 0%, 100% { translate: 0 0; } 50% { translate: 0 -8px; } }
+@keyframes tp-spin { to { rotate: 360deg; } }
+@keyframes tp-twinkle { 0%, 100% { opacity: 1; scale: 1; } 50% { opacity: 0.35; scale: 0.7; } }
+@keyframes tp-morph {
+  0%, 100% { border-radius: 46% 54% 52% 48% / 50% 44% 56% 50%; }
+  50% { border-radius: 56% 44% 42% 58% / 44% 56% 44% 56%; }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -1,5 +1,6 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode, type ButtonHTMLAttributes, type InputHTMLAttributes, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react';
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type ButtonHTMLAttributes, type InputHTMLAttributes, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react';
 import { Loader2, X } from 'lucide-react';
+import { createPortal } from 'react-dom';
 
 const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(' ');
 export { cx };
@@ -240,26 +241,68 @@ export function Tabs<T extends string>({ tabs, value, onChange, className }: { t
 
 // ---------- Dropdown menu ----------
 
+/**
+ * Dropdown menu. The panel is rendered into <body> with fixed positioning so it is never
+ * clipped by a scrolling table or card, and it flips upward when there is no room below.
+ */
 export function Menu({ trigger, children, align = 'right' }: { trigger: ReactNode; children: ReactNode; align?: 'left' | 'right' }) {
   const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ top?: number; bottom?: number; left?: number; right?: number; maxHeight: number } | null>(null);
   const ref = useRef<HTMLDivElement>(null);
+  const panel = useRef<HTMLDivElement>(null);
+
+  const place = () => {
+    const r = ref.current?.getBoundingClientRect();
+    if (!r) return;
+    const vh = window.innerHeight;
+    const vw = window.innerWidth;
+    const below = vh - r.bottom - 8;
+    const above = r.top - 8;
+    const want = panel.current?.scrollHeight ?? 260;
+    const up = below < Math.min(want, 260) && above > below;
+    const horiz = align === 'right' ? { right: Math.max(8, vw - r.right) } : { left: Math.max(8, r.left) };
+    setPos(up ? { bottom: vh - r.top + 4, maxHeight: above, ...horiz } : { top: r.bottom + 4, maxHeight: below, ...horiz });
+  };
+
+  useLayoutEffect(() => {
+    if (open) place();
+  }, [open]);
+
   useEffect(() => {
     if (!open) return;
-    const onDoc = (e: MouseEvent) => !ref.current?.contains(e.target as Node) && setOpen(false);
+    const onDoc = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (!ref.current?.contains(t) && !panel.current?.contains(t)) setOpen(false);
+    };
+    const close = () => setOpen(false);
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
     document.addEventListener('mousedown', onDoc);
-    return () => document.removeEventListener('mousedown', onDoc);
+    document.addEventListener('keydown', onKey);
+    window.addEventListener('resize', close);
+    window.addEventListener('scroll', close, true);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      document.removeEventListener('keydown', onKey);
+      window.removeEventListener('resize', close);
+      window.removeEventListener('scroll', close, true);
+    };
   }, [open]);
+
   return (
-    <div className="relative" ref={ref}>
+    <div className="relative inline-block" ref={ref}>
       <div onClick={() => setOpen((o) => !o)}>{trigger}</div>
-      {open && (
-        <div
-          onClick={() => setOpen(false)}
-          className={cx('absolute z-40 mt-1 min-w-[210px] overflow-hidden rounded-xl border-[1.5px] border-stone-900 bg-white py-1 shadow-hard', align === 'right' ? 'right-0' : 'left-0')}
-        >
-          {children}
-        </div>
-      )}
+      {open &&
+        createPortal(
+          <div
+            ref={panel}
+            onClick={() => setOpen(false)}
+            style={{ position: 'fixed', zIndex: 60, visibility: pos ? 'visible' : 'hidden', ...(pos ?? { top: 0, left: 0, maxHeight: 400 }) }}
+            className="min-w-[210px] overflow-y-auto rounded-xl border-[1.5px] border-stone-900 bg-white py-1 shadow-hard"
+          >
+            {children}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

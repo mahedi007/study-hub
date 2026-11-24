@@ -195,6 +195,8 @@ export type Block =
       ctaLabel: string;
       ctaHref: string;
       overlay: number;
+      /** Editorial style: live collage of the newest materials, teachers and counts beside the title. */
+      showcase: boolean;
     })
   | (BlockBase & { type: 'text'; heading: string; body: string })
   | (BlockBase & { type: 'announcements'; heading: string; limit: number })

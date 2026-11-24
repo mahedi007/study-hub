@@ -88,6 +88,12 @@ r.patch('/users/:id', async (c) => {
   if (row!.email === superAdminEmail(c.env) && (b.role === 'teacher' || b.status === 'disabled')) fail(400, 'The super admin cannot be demoted or disabled');
   const f: Record<string, unknown> = {};
   if (b.name !== undefined) f.name = clampStr(b.name, 120);
+  if (b.bio !== undefined) f.bio = clampStr(b.bio, 2000);
+  if (b.avatar_asset !== undefined) {
+    const asset = b.avatar_asset ? String(b.avatar_asset) : null;
+    if (asset && !(await c.env.DB.prepare(`SELECT id FROM assets WHERE id = ?`).bind(asset).first())) fail(400, 'That photo no longer exists');
+    f.avatar_asset = asset;
+  }
   if (b.role !== undefined && ['admin', 'teacher'].includes(b.role)) f.role = b.role;
   if (b.status !== undefined && ['active', 'disabled'].includes(b.status)) f.status = b.status;
   if (b.quota_mb !== undefined) f.quota_bytes = Math.round(Math.max(0, Number(b.quota_mb) || 0) * 1048576);

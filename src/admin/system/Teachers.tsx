@@ -4,7 +4,8 @@ import { Check, Copy, ExternalLink, KeyRound, MessageCircle, MoreHorizontal, Pen
 import { toast } from 'sonner';
 import { adminApi } from '../../lib/api';
 import type { User } from '../../../shared/types';
-import { Badge, Button, Card, Field, Input, Menu, MenuItem, Modal, PageHeader, PageLoader, Progress, Select, useConfirm } from '../../components/ui';
+import { Badge, Button, Card, Field, Input, Menu, MenuItem, Modal, PageHeader, PageLoader, Progress, Select, Textarea, useConfirm } from '../../components/ui';
+import { ImagePicker } from '../../components/ImagePicker';
 import { copyText, formatBytes, timeAgo } from '../../lib/format';
 import { useMe } from '../AdminApp';
 import { realEmail } from '../../../shared/design';
@@ -273,7 +274,7 @@ export default function Teachers() {
                     <td className="hidden px-2 py-3 text-xs text-stone-500 lg:table-cell">{timeAgo(u.last_login_at)}</td>
                     <td className="px-2 py-3">
                       <Menu trigger={<button className="rounded-full p-1.5 text-stone-500 hover:bg-stone-100" aria-label="Actions"><MoreHorizontal className="h-4 w-4" /></button>}>
-                        <MenuItem icon={<Pencil className="h-4 w-4" />} onClick={() => setEdit(u)}>Edit name, username, email & storage</MenuItem>
+                        <MenuItem icon={<Pencil className="h-4 w-4" />} onClick={() => setEdit(u)}>Edit profile (photo, name, bio…)</MenuItem>
                         {(!isSuper || u.id === me.user.id) && <MenuItem icon={<KeyRound className="h-4 w-4" />} onClick={() => setPwUser(u)}>Set a new password</MenuItem>}
                         {realEmail(u.email) && !isSuper && <MenuItem onClick={() => makeLink(u)}>{u.has_password ? 'Send a reset link instead' : 'Copy invite link again'}</MenuItem>}
                         {u.handle && <MenuItem icon={<ExternalLink className="h-4 w-4" />} onClick={() => window.open(`/?teacher=${u.handle}`, '_blank')}>View their materials</MenuItem>}
@@ -376,20 +377,30 @@ function EditUser({ user, isSuper, onClose, onSave }: { user: U; isSuper: boolea
   const [name, setName] = useState(user.name);
   const [handle, setHandle] = useState(user.handle ?? '');
   const [email, setEmail] = useState(realEmail(user.email));
+  const [bio, setBio] = useState(user.bio ?? '');
+  const [avatar, setAvatar] = useState<string | null>(user.avatar_asset ?? null);
   const [quota, setQuota] = useState(mbOf(user.quota_bytes));
-  const body: Record<string, unknown> = { name, handle, quota_mb: quota === '' ? 0 : Number(quota) };
+  const body: Record<string, unknown> = { name, handle, bio, avatar_asset: avatar, quota_mb: quota === '' ? 0 : Number(quota) };
   if (!isSuper && email !== realEmail(user.email)) body.email = email;
   return (
-    <Modal open onClose={onClose} title={`Edit ${user.name || user.handle}`} footer={<><Button onClick={onClose}>Cancel</Button><Button variant="primary" onClick={() => onSave(body)}>Save</Button></>}>
-      <div className="space-y-3">
-        <Field label="Name"><Input value={name} onChange={(e) => setName(e.target.value)} /></Field>
-        <Field label="Username" hint={`Used to sign in, and for the filter link /?teacher=${handle || '…'}`}>
-          <Input value={handle} onChange={(e) => setHandle(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))} />
+    <Modal open wide onClose={onClose} title={`Edit ${user.name || user.handle}’s profile`} footer={<><Button onClick={onClose}>Cancel</Button><Button variant="primary" onClick={() => onSave(body)}>Save profile</Button></>}>
+      <div className="space-y-4">
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
+          <ImagePicker label="Photo" value={avatar} onChange={setAvatar} compact />
+          <div className="grid flex-1 gap-3 sm:grid-cols-2">
+            <Field label="Display name"><Input value={name} onChange={(e) => setName(e.target.value)} /></Field>
+            <Field label="Username" hint={`Sign-in name · filter link /?teacher=${handle || '…'}`}>
+              <Input value={handle} onChange={(e) => setHandle(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))} />
+            </Field>
+            <Field label="Email" hint={isSuper ? 'The super admin email is set in Cloudflare.' : 'Optional with a username + password.'}>
+              <Input type="email" value={email} disabled={isSuper} onChange={(e) => setEmail(e.target.value)} placeholder="No email" />
+            </Field>
+            <Field label="Storage limit (MB)" hint="Empty = no limit"><Input type="number" min={0} value={quota} onChange={(e) => setQuota(e.target.value)} placeholder="No limit" /></Field>
+          </div>
+        </div>
+        <Field label="Short bio" hint="Shown on the site when students pick this teacher.">
+          <Textarea rows={3} value={bio} onChange={(e) => setBio(e.target.value)} />
         </Field>
-        <Field label="Email" hint={isSuper ? 'The super admin email is set in Cloudflare.' : 'Optional if they sign in with a username and password.'}>
-          <Input type="email" value={email} disabled={isSuper} onChange={(e) => setEmail(e.target.value)} placeholder="No email" />
-        </Field>
-        <Field label="Storage limit (MB)" hint="Leave empty for no limit"><Input type="number" min={0} value={quota} onChange={(e) => setQuota(e.target.value)} placeholder="No limit" /></Field>
       </div>
     </Modal>
   );

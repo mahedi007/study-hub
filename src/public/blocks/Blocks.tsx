@@ -156,6 +156,119 @@ function CollectionCard({ c, ctx, style, index }: { c: Collection; ctx: BlockCtx
 
 // ---------- Blocks ----------
 
+/** Small facts under the headline: how much is here and who teaches it. */
+function HeroStatsRow({ ctx }: { ctx: BlockCtx }) {
+  const { stats, teachers } = ctx.data;
+  if (!stats.materials && !teachers.length) return null;
+  const bn = ctx.lang === 'bn';
+  return (
+    <div className="mt-7 flex flex-wrap items-center gap-x-6 gap-y-3">
+      <div className="flex items-baseline gap-1.5">
+        <span className="tp-h text-3xl font-extrabold">{num(stats.materials, ctx.lang)}</span>
+        <span className="tp-muted text-[15px]">{bn ? 'টি উপকরণ' : 'materials'}</span>
+      </div>
+      {stats.collections > 0 && (
+        <div className="flex items-baseline gap-1.5">
+          <span className="tp-h text-3xl font-extrabold">{num(stats.collections, ctx.lang)}</span>
+          <span className="tp-muted text-[15px]">{bn ? 'টি কোর্স' : 'courses'}</span>
+        </div>
+      )}
+      {teachers.length > 0 && (
+        <div className="flex items-center gap-2.5">
+          <TeacherFaces teachers={teachers} />
+          <span className="tp-muted text-[15px]">{bn ? `${num(teachers.length, ctx.lang)} জন শিক্ষক` : `${teachers.length} teacher${teachers.length > 1 ? 's' : ''}`}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TeacherFaces({ teachers }: { teachers: PublicPageData['teachers'] }) {
+  const shown = teachers.slice(0, 4);
+  return (
+    <span className="tp-avatar-stack">
+      {shown.map((t) => (t.avatar_url ? <img key={t.id} src={t.avatar_url} alt={t.name} title={t.name} /> : <span key={t.id} title={t.name}>{(t.name || '?').slice(0, 1).toUpperCase()}</span>))}
+      {teachers.length > shown.length && <span>+{teachers.length - shown.length}</span>}
+    </span>
+  );
+}
+
+const SHOWCASE_SLOTS = [
+  { top: '6%', left: '2%', r: '-5deg', delay: '0s' },
+  { top: '36%', left: '20%', r: '3deg', delay: '-2s' },
+  { top: '66%', left: '4%', r: '-2deg', delay: '-4s' },
+];
+const PLACEHOLDER_ITEMS = [
+  { icon: '📖', bn: 'অনুশীলন', en: 'Exercises' },
+  { icon: '🎧', bn: 'অডিও লেকচার', en: 'Audio lectures' },
+  { icon: '📝', bn: 'নোট ও শিট', en: 'Notes & sheets' },
+];
+
+/** Live collage beside the editorial headline: the newest materials as tilted cards over a soft blob. */
+function HeroShowcase({ ctx }: { ctx: BlockCtx }) {
+  const bn = ctx.lang === 'bn';
+  const latest = [...ctx.data.materials].sort((a, b) => b.created_at - a.created_at).slice(0, 3);
+  const teacherName = (m: Material) => ctx.data.teachers.find((t) => t.id === m.owner_id)?.name ?? (m as Material & { owner_name?: string }).owner_name ?? '';
+  return (
+    <div className="tp-showcase hidden lg:block" aria-hidden={!latest.length}>
+      <div className="tp-showcase-ring" />
+      <div className="tp-showcase-blob" />
+      <span className="tp-showcase-spark" style={{ top: '2%', right: '18%' }}>✦</span>
+      <span className="tp-showcase-spark" style={{ bottom: '6%', right: '6%', fontSize: 16, animationDelay: '-1.4s' }}>✦</span>
+      <span className="tp-showcase-spark" style={{ top: '46%', right: '0%', fontSize: 12, animationDelay: '-2.2s' }}>✦</span>
+
+      {latest.length
+        ? latest.map((m, i) => {
+            const s = SHOWCASE_SLOTS[i];
+            const who = teacherName(m);
+            return (
+              <div key={m.id} className="tp-showcase-item" style={{ top: s.top, left: s.left, animationDelay: s.delay, zIndex: 10 - i, ['--r' as any]: s.r }}>
+                <PLink to={topicPath(m)} preview={ctx.preview} reload={m.kind === 'html'} className="tp-card flex items-center gap-3 p-3 pr-4">
+                  <span className="tp-showcase-icon">{iconFor(m)}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="tp-h block truncate text-[17px] font-bold">{m.title}</span>
+                    <span className="tp-muted block truncate text-[13px]">
+                      {KIND_LABELS[m.kind][ctx.lang]}
+                      {who && ` · ${who}`}
+                    </span>
+                  </span>
+                  {isNew(m.created_at) && <span className="tp-new shrink-0">{bn ? 'নতুন' : 'New'}</span>}
+                </PLink>
+              </div>
+            );
+          })
+        : PLACEHOLDER_ITEMS.map((p, i) => {
+            const s = SHOWCASE_SLOTS[i];
+            return (
+              <div key={p.icon} className="tp-showcase-item" style={{ top: s.top, left: s.left, animationDelay: s.delay, ['--r' as any]: s.r }}>
+                <div className="tp-card flex items-center gap-3 p-3 pr-4">
+                  <span className="tp-showcase-icon">{p.icon}</span>
+                  <span className="tp-h text-[17px] font-bold">{bn ? p.bn : p.en}</span>
+                </div>
+              </div>
+            );
+          })}
+
+      <span className="tp-showcase-pill" style={{ top: '-3%', right: '-1%', zIndex: 30, background: 'var(--tp-primary)', color: 'var(--tp-on-primary)', animationDelay: '-3s', rotate: '4deg' }}>
+        <span style={{ color: 'var(--tp-accent)' }}>✦</span> {bn ? 'সদ্য যোগ হয়েছে' : 'Just added'}
+      </span>
+      {latest.length > 0 && (
+        <a
+          href="#materials"
+          onClick={(e) => {
+            e.preventDefault();
+            (e.currentTarget.ownerDocument.getElementById('materials') as HTMLElement | null)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }}
+          className="tp-showcase-pill"
+          style={{ bottom: '1%', right: '8%', zIndex: 30, background: 'var(--tp-accent)', color: 'var(--tp-ink)', animationDelay: '-1s' }}
+        >
+          {bn ? 'সব উপকরণ দেখো' : 'See everything'} <ArrowRight className="h-4 w-4" />
+        </a>
+      )}
+    </div>
+  );
+}
+
 function HeroBlock({ b, ctx }: { b: Extract<Block, { type: 'hero' }>; ctx: BlockCtx }) {
   const avatar = b.avatarAsset ? assetSrc(b.avatarAsset) : null;
   const center = b.align === 'center';
@@ -172,6 +285,21 @@ function HeroBlock({ b, ctx }: { b: Extract<Block, { type: 'hero' }>; ctx: Block
     </h1>
   );
 
+  if (b.style === 'editorial' && !center && b.showcase !== false) {
+    return (
+      <section className="relative grid items-center gap-8 pb-2 pt-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] lg:gap-6">
+        <div className="min-w-0">
+          {avatar && <img src={avatar} alt="" className="mb-5 h-20 w-20 rounded-full border-[1.5px] object-cover" style={{ borderColor: 'var(--tp-ink)', boxShadow: '3px 3px 0 var(--tp-ink)' }} />}
+          {kicker}
+          {title('mt-4 text-[clamp(38px,8vw,70px)] leading-[1.3] lg:text-[clamp(44px,5.4vw,70px)]')}
+          {b.subtitle && <p className="tp-muted mt-5 max-w-[34em] text-[19px]">{b.subtitle}</p>}
+          {cta}
+          <HeroStatsRow ctx={ctx} />
+        </div>
+        <HeroShowcase ctx={ctx} />
+      </section>
+    );
+  }
   if (b.style === 'editorial') {
     return (
       <section className={`relative pb-2 pt-6 ${center ? 'text-center' : ''}`}>

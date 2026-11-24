@@ -52,6 +52,16 @@ export function HomePage() {
   const [lang, setLang] = useLang(data?.design.language ?? 'bn');
   useTitle(data ? data.design.seo.title || data.data.site.siteName : undefined);
   useEffect(() => {
+    // Count one home-page visit per browser session for the admin dashboard.
+    try {
+      if (sessionStorage.getItem('sh_visit')) return;
+      sessionStorage.setItem('sh_visit', '1');
+    } catch {
+      /* storage blocked: still count */
+    }
+    fetch('/api/public/visit', { method: 'POST', keepalive: true }).catch(() => undefined);
+  }, []);
+  useEffect(() => {
     if (!data?.design.seo.description) return;
     let meta = document.querySelector('meta[name="description"]');
     if (!meta) {

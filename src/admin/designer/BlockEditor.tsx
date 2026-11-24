@@ -68,6 +68,9 @@ export function BlockEditor({
               </Select>
             </Field>
           </div>
+          {b.style === 'editorial' && b.align === 'left' && (
+            <Toggle checked={b.showcase !== false} onChange={(v) => upd({ showcase: v })} label="Show the live collage on the right (newest materials, teachers & counts)" />
+          )}
           {b.style !== 'editorial' && b.style !== 'minimal' && <ImagePicker label={b.style === 'split' ? 'Side image' : 'Banner image'} value={b.bannerAsset} onChange={(v) => upd({ bannerAsset: v })} />}
           <div className="flex items-end gap-3">
             <ImagePicker label="Photo" value={b.avatarAsset} onChange={(v) => upd({ avatarAsset: v })} compact />

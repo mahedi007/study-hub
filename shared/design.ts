@@ -200,6 +200,7 @@ export function newBlock(type: BlockType): Block {
         ctaLabel: '',
         ctaHref: '',
         overlay: 40,
+        showcase: true,
       };
     case 'text':
       return { ...base, type, heading: 'About', body: 'Write something about your class here. **Markdown** is supported.' };

@@ -96,8 +96,89 @@ r.post('/me/logout-all', async (c) => {
   return c.json({ ok: true });
 });
 
+/** Admins: the whole site at a glance — every teacher's materials, views, links and storage. */
+async function siteDashboard(c: any) {
+  const db: D1Database = c.env.DB;
+  const since = new Date(Date.now() - 29 * 86400000).toISOString().slice(0, 10);
+  const sa = superAdminEmail(c.env);
+  const [counts, views, visits, top, recent, teachers, kinds] = await Promise.all([
+    db.prepare(
+      `SELECT
+        (SELECT COUNT(*) FROM materials) AS materials,
+        (SELECT COUNT(*) FROM materials WHERE status = 'published') AS published,
+        (SELECT COUNT(*) FROM materials WHERE status = 'draft') AS drafts,
+        (SELECT COUNT(*) FROM collections) AS collections,
+        (SELECT COUNT(*) FROM share_links WHERE active = 1) AS links,
+        (SELECT COALESCE(SUM(view_count), 0) FROM materials) AS material_views,
+        (SELECT COALESCE(SUM(view_count), 0) FROM collections) AS collection_views,
+        (SELECT COALESCE(SUM(view_count), 0) FROM share_links) AS link_views,
+        (SELECT COALESCE(SUM(views), 0) FROM daily_views WHERE owner_id = '_site') AS home_visits,
+        (SELECT COUNT(*) FROM users WHERE status = 'active' AND email != ?1) AS teachers,
+        (SELECT COUNT(*) FROM users WHERE status = 'pending') AS pending,
+        (SELECT COALESCE(SUM(size_bytes), 0) FROM materials) + (SELECT COALESCE(SUM(size_bytes), 0) FROM assets) AS storage`,
+    )
+      .bind(sa)
+      .first<any>(),
+    db.prepare(`SELECT day, SUM(views) AS views FROM daily_views WHERE owner_id != '_site' AND day >= ? GROUP BY day`).bind(since).all<any>(),
+    db.prepare(`SELECT day, views FROM daily_views WHERE owner_id = '_site' AND day >= ?`).bind(since).all<any>(),
+    db.prepare(`SELECT m.*, u.name AS owner_name FROM materials m JOIN users u ON u.id = m.owner_id ORDER BY m.view_count DESC LIMIT 8`).all(),
+    db.prepare(`SELECT m.*, u.name AS owner_name FROM materials m JOIN users u ON u.id = m.owner_id ORDER BY m.updated_at DESC LIMIT 8`).all(),
+    db.prepare(
+      `SELECT u.id, u.name, u.handle, u.email, u.status, u.avatar_asset, u.last_login_at, u.quota_bytes,
+         (SELECT COUNT(*) FROM materials WHERE owner_id = u.id) AS materials,
+         (SELECT COUNT(*) FROM materials WHERE owner_id = u.id AND status = 'published') AS published,
+         (SELECT COUNT(*) FROM collections WHERE owner_id = u.id) AS collections,
+         (SELECT COUNT(*) FROM share_links WHERE owner_id = u.id AND active = 1) AS links,
+         (SELECT COALESCE(SUM(view_count), 0) FROM materials WHERE owner_id = u.id) AS views,
+         (SELECT COALESCE(SUM(size_bytes), 0) FROM materials WHERE owner_id = u.id) + (SELECT COALESCE(SUM(size_bytes), 0) FROM assets WHERE owner_id = u.id) AS used_bytes,
+         (SELECT MAX(updated_at) FROM materials WHERE owner_id = u.id) AS last_upload
+       FROM users u WHERE u.status != 'pending' ORDER BY views DESC, materials DESC`,
+    ).all<any>(),
+    db.prepare(`SELECT kind, COUNT(*) AS n FROM materials GROUP BY kind ORDER BY n DESC`).all<any>(),
+  ]);
+  const series = (rows: any[], n: number) => {
+    const byDay = new Map(rows.map((v) => [v.day, Number(v.views)]));
+    return Array.from({ length: n }, (_, i) => {
+      const day = new Date(Date.now() - (n - 1 - i) * 86400000).toISOString().slice(0, 10);
+      return { day, views: byDay.get(day) ?? 0 };
+    });
+  };
+  const withOwner = (r: any) => ({ ...mapMaterial(r), owner_name: r.owner_name });
+  return c.json({
+    scope: 'site',
+    counts: {
+      ...Object.fromEntries(Object.entries(counts ?? {}).map(([k, v]) => [k, Number(v ?? 0)])),
+      views: Number(counts?.material_views ?? 0),
+    },
+    series: series(views.results, 30),
+    visits: series(visits.results, 30),
+    top: top.results.map(withOwner),
+    recent: recent.results.map(withOwner),
+    kinds: kinds.results.map((k) => ({ kind: k.kind, count: Number(k.n) })),
+    teachers: teachers.results.map((u) => ({
+      id: u.id,
+      name: u.name,
+      handle: u.handle,
+      status: u.status,
+      super: u.email === sa,
+      avatar_url: assetUrl(u.avatar_asset),
+      last_login_at: u.last_login_at ? Number(u.last_login_at) : null,
+      last_upload: u.last_upload ? Number(u.last_upload) : null,
+      quota_bytes: Number(u.quota_bytes ?? 0),
+      materials: Number(u.materials),
+      published: Number(u.published),
+      collections: Number(u.collections),
+      links: Number(u.links),
+      views: Number(u.views),
+      used_bytes: Number(u.used_bytes),
+    })),
+    storage: { used: Number(counts?.storage ?? 0), quota: 10 * 1024 * 1024 * 1024 },
+  });
+}
+
 r.get('/dashboard', async (c) => {
   const user = c.get('user');
+  if (user.role === 'admin' && c.req.query('scope') !== 'mine') return siteDashboard(c);
   const since = new Date(Date.now() - 13 * 86400000).toISOString().slice(0, 10);
   const [counts, views, top, recent, used] = await Promise.all([
     c.env.DB.prepare(

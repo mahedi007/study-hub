@@ -28,7 +28,7 @@ export default function Materials({ scope }: { scope?: 'all' }) {
   const [status, setStatus] = useState('');
   const [kind, setKind] = useState('');
   const [subject, setSubject] = useState('');
-  const [owner, setOwner] = useState('');
+  const [owner, setOwner] = useState(() => params.get('teacher') ?? '');
   const [view, setView] = useState<'table' | 'grid'>(() => (localStorage.getItem('studyhub.matview') as 'table' | 'grid') || 'table');
   const [selected, setSelected] = useState<string[]>([]);
   const [newOpen, setNewOpen] = useState(params.get('new') === '1');
