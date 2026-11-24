@@ -116,8 +116,8 @@ export default function CollectionEdit() {
         <Link to="/admin/collections" className="rounded-lg p-1.5 text-stone-500 hover:bg-stone-100" aria-label="Back"><ArrowLeft className="h-5 w-5" /></Link>
         <h1 className="min-w-0 flex-1 truncate text-xl font-semibold">{c.title}</h1>
         <StatusBadge status={c.status} />
-        {c.status === 'published' && me.user.handle && (
-          <a href={`/t/${me.user.handle}/c/${c.id}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm font-medium hover:bg-stone-50"><ExternalLink className="h-4 w-4" /> Open</a>
+        {c.status === 'published' && (
+          <a href={`/c/${c.id}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm font-medium hover:bg-stone-50"><ExternalLink className="h-4 w-4" /> Open</a>
         )}
         <Button icon={<Share2 className="h-4 w-4" />} onClick={() => setShare(true)}>Share</Button>
         <Button variant="primary" icon={<Save className="h-4 w-4" />} loading={saving} disabled={!dirty} onClick={save}>Save</Button>

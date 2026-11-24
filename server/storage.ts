@@ -61,6 +61,8 @@ export async function buildAccess(env: Env, m: Material, origin: string, allowDo
   if (!m.ready) return extra;
 
   if (m.kind === 'html') {
+    // Published / link-only HTML lessons are standalone pages at /topic/<slug>/ (served untouched).
+    if (m.status !== 'draft') return { ...extra, bundleUrl: `${origin}/topic/${encodeURIComponent(m.slug)}/` };
     const base = env.CONTENT_ORIGIN ? env.CONTENT_ORIGIN.replace(/\/$/, '') : `${origin}/api/bundle`;
     return { ...extra, bundleUrl: `${base}/b/${token}/${encodePath(m.entry_path || 'index.html')}` };
   }

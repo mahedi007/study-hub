@@ -3,6 +3,7 @@ import type { User } from '../shared/types';
 export interface Env {
   DB: D1Database;
   BUCKET: R2Bucket;
+  ASSETS?: Fetcher;
   SIGNING_KEY?: string;
   SUPER_ADMIN_EMAIL?: string;
   AUTH_SECRET?: string;

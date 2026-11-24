@@ -44,9 +44,9 @@ export default function Dashboard() {
         description="Here's what's happening with your materials."
         actions={
           <>
-            <Link to="/admin/design" className="inline-flex items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3.5 py-2 text-sm font-medium hover:bg-stone-50">
-              <Palette className="h-4 w-4" /> Design page
-            </Link>
+            {(me.isSuperAdmin || me.user.role === 'admin') && <Link to="/admin/design" className="inline-flex items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3.5 py-2 text-sm font-medium hover:bg-stone-50">
+              <Palette className="h-4 w-4" /> Home page design
+            </Link>}
             <Link to="/admin/materials?new=1" className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3.5 py-2 text-sm font-medium text-white hover:bg-indigo-700">
               <Upload className="h-4 w-4" /> Upload material
             </Link>
@@ -93,11 +93,9 @@ export default function Dashboard() {
             <Link to="/admin/collections" className="flex items-center gap-1.5 rounded-lg bg-stone-50 px-3 py-2 text-xs font-medium hover:bg-stone-100">
               <Plus className="h-3.5 w-3.5" /> Collection
             </Link>
-            {me.user.handle && (
-              <a href={`/t/${me.user.handle}`} target="_blank" rel="noreferrer" className="col-span-2 flex items-center gap-1.5 rounded-lg bg-stone-50 px-3 py-2 text-xs font-medium hover:bg-stone-100">
-                <Globe className="h-3.5 w-3.5" /> {window.location.host}/t/{me.user.handle}
-              </a>
-            )}
+            <a href={me.user.handle ? `/?teacher=${me.user.handle}` : '/'} target="_blank" rel="noreferrer" className="col-span-2 flex items-center gap-1.5 rounded-lg bg-stone-50 px-3 py-2 text-xs font-medium hover:bg-stone-100">
+              <Globe className="h-3.5 w-3.5" /> See my materials on the site
+            </a>
           </div>
         </Card>
       </div>

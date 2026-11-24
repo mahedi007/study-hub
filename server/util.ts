@@ -1,6 +1,6 @@
 import { customAlphabet } from 'nanoid';
 import type { Announcement, Collection, Material, ShareLink, SiteSettings, User } from '../shared/types';
-import { DEFAULT_SETTINGS } from '../shared/design';
+import { DEFAULT_SETTINGS, slugify } from '../shared/design';
 import type { Env } from './env';
 
 const alpha = '0123456789abcdefghijkmnopqrstuvwxyz';
@@ -77,6 +77,7 @@ export function mapMaterial(r: Row): Material {
     title: r.title,
     description: r.description ?? '',
     kind: r.kind,
+    slug: r.slug ?? r.id,
     icon: r.icon ?? '',
     audio_file: r.audio_file ?? null,
     file_name: r.file_name ?? null,
@@ -193,3 +194,14 @@ export async function uniqueHandle(env: Env, base: string, excludeId?: string): 
 
 export const normEmail = (v: unknown) => String(v ?? '').trim().toLowerCase();
 export const validEmail = (e: string) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e);
+
+/** A topic slug that no other material uses (adds -2, -3, … when needed). */
+export async function uniqueSlug(env: Env, base: string, excludeId?: string): Promise<string> {
+  const root = slugify(base);
+  for (let i = 1; i < 60; i++) {
+    const candidate = i === 1 ? root : `${root.slice(0, 74)}-${i}`;
+    const row = await env.DB.prepare(`SELECT id FROM materials WHERE slug = ?`).bind(candidate).first<{ id: string }>();
+    if (!row || row.id === excludeId) return candidate;
+  }
+  return `${root.slice(0, 60)}-${newId().slice(0, 6)}`;
+}

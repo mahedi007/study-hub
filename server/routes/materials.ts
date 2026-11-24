@@ -2,10 +2,10 @@ import { Hono } from 'hono';
 import type { AppEnv } from '../env';
 import { fail } from '../env';
 import { assertOwner } from '../auth';
-import { audit, clampStr, getSettings, mapMaterial, newId, now } from '../util';
+import { audit, clampStr, getSettings, mapMaterial, newId, now, uniqueSlug } from '../util';
 import { buildAccess, canPresign, deletePrefix, encodePath, listPrefix, presign, usedBytes } from '../storage';
 import { materialPrefix, safePath } from '../tokens';
-import { kindFromFileName, mimeFor } from '../../shared/design';
+import { SLUG_RE, kindFromFileName, mimeFor } from '../../shared/design';
 import type { Material, MaterialKind } from '../../shared/types';
 
 const KINDS: MaterialKind[] = ['pdf', 'doc', 'slides', 'sheet', 'audio', 'video', 'image', 'html', 'embed', 'note', 'file'];
@@ -81,11 +81,12 @@ r.post('/materials', async (c) => {
   const ready = kind === 'embed' || kind === 'note' ? 1 : 0;
   if (kind === 'embed' && !f.embed_url) fail(400, 'Embed URL is required');
   await c.env.DB.prepare(
-    `INSERT INTO materials (id, owner_id, title, description, kind, icon, embed_url, body_md, subject, class_level, tags, cover_asset, status, allow_download, ready, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO materials (id, slug, owner_id, title, description, kind, icon, embed_url, body_md, subject, class_level, tags, cover_asset, status, allow_download, ready, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
       id,
+      await uniqueSlug(c.env, body.slug ? String(body.slug) : String(f.title || 'material')),
       user.id,
       (f.title as string) || 'Untitled',
       (f.description as string) ?? '',
@@ -135,7 +136,15 @@ r.get('/materials/:id', async (c) => {
 r.patch('/materials/:id', async (c) => {
   const user = c.get('user');
   const m = await loadMaterial(c, c.req.param('id'));
-  const f = pickFields(await c.req.json());
+  const body = await c.req.json();
+  const f = pickFields(body);
+  if (body.slug !== undefined && body.slug !== m.slug) {
+    const slug = String(body.slug).trim().toLowerCase();
+    if (!SLUG_RE.test(slug)) fail(400, 'Link can use only a-z, 0-9 and dashes (e.g. bagdhara-exercise).');
+    const taken = await c.env.DB.prepare(`SELECT id FROM materials WHERE slug = ? AND id != ?`).bind(slug, m.id).first();
+    if (taken) fail(409, `“${slug}” is already used by another material. Try another link.`);
+    f.slug = slug;
+  }
   const keys = Object.keys(f);
   if (!keys.length) return c.json({ material: m });
   if (m.kind === 'embed' || f.kind === 'embed') {
@@ -152,12 +161,19 @@ r.patch('/materials/:id', async (c) => {
 });
 
 async function deleteMaterial(c: any, m: Material) {
-  await deletePrefix(c.env, `m/${m.id}/`);
+  // Remove the database rows first so the material disappears everywhere immediately,
+  // then clean up the files in the background.
   await c.env.DB.batch([
     c.env.DB.prepare(`DELETE FROM share_links WHERE target_type = 'material' AND target_id = ?`).bind(m.id),
     c.env.DB.prepare(`DELETE FROM collection_items WHERE material_id = ?`).bind(m.id),
     c.env.DB.prepare(`DELETE FROM materials WHERE id = ?`).bind(m.id),
   ]);
+  const cleanup = deletePrefix(c.env, `m/${m.id}/`).catch((e) => console.error('R2 cleanup failed', m.id, e));
+  try {
+    c.executionCtx.waitUntil(cleanup);
+  } catch {
+    await cleanup;
+  }
 }
 
 r.delete('/materials/:id', async (c) => {
@@ -198,10 +214,10 @@ r.post('/materials/:id/duplicate', async (c) => {
   const id = newId();
   const t = now();
   await c.env.DB.prepare(
-    `INSERT INTO materials (id, owner_id, title, description, kind, icon, embed_url, body_md, subject, class_level, tags, cover_asset, status, allow_download, ready, created_at, updated_at)
-     SELECT ?, owner_id, title || ' (copy)', description, kind, icon, embed_url, body_md, subject, class_level, tags, cover_asset, 'draft', allow_download, ready, ?, ? FROM materials WHERE id = ?`,
+    `INSERT INTO materials (id, slug, owner_id, title, description, kind, icon, embed_url, body_md, subject, class_level, tags, cover_asset, status, allow_download, ready, created_at, updated_at)
+     SELECT ?, ?, owner_id, title || ' (copy)', description, kind, icon, embed_url, body_md, subject, class_level, tags, cover_asset, 'draft', allow_download, ready, ?, ? FROM materials WHERE id = ?`,
   )
-    .bind(id, t, t, m.id)
+    .bind(id, await uniqueSlug(c.env, `${m.slug}-copy`), t, t, m.id)
     .run();
   await audit(c.env, user, 'material.duplicate', id, { from: m.id });
   const row = await c.env.DB.prepare(`SELECT * FROM materials WHERE id = ?`).bind(id).first();

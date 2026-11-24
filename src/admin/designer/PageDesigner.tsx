@@ -282,7 +282,7 @@ export default function PageDesigner() {
       setPublishedAt(res.published_at);
       setSaveState('saved');
       qc.invalidateQueries({ queryKey: ['page'] });
-      toast.success('Your page is live!', { action: me.user.handle ? { label: 'View', onClick: () => window.open(`/t/${me.user.handle}`, '_blank') } : undefined });
+      toast.success('The home page is live!', { action: { label: 'View', onClick: () => window.open('/', '_blank') } });
     } catch (e: any) {
       toast.error(e.message);
     } finally {
@@ -321,7 +321,7 @@ export default function PageDesigner() {
       <div className="flex flex-wrap items-center gap-2 border-b border-stone-200 bg-white px-3 py-2">
         <Link to="/admin" className="rounded-lg p-1.5 text-stone-500 hover:bg-stone-100" aria-label="Back"><ArrowLeft className="h-5 w-5" /></Link>
         <div className="mr-2">
-          <div className="text-sm font-semibold">Page designer</div>
+          <div className="text-sm font-semibold">Home page design</div>
           <div className="text-[11px] text-stone-500">{publishedAt ? `Live since ${formatDate(publishedAt)}` : 'Not published yet'}</div>
         </div>
         <div className="flex items-center rounded-lg border border-stone-200 p-0.5">
@@ -338,11 +338,9 @@ export default function PageDesigner() {
         <div className="hidden text-xs text-stone-500 sm:block">{saveLabel}</div>
         <div className="ml-auto flex items-center gap-2">
           <Button size="sm" variant="ghost" icon={<RotateCcw className="h-3.5 w-3.5" />} onClick={revert} disabled={!designQ.data?.published}>Revert</Button>
-          {me.user.handle && (
-            <a href={`/t/${me.user.handle}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-lg border border-stone-300 px-2.5 py-1.5 text-xs font-medium hover:bg-stone-50">
-              <ExternalLink className="h-3.5 w-3.5" /> Live page
-            </a>
-          )}
+          <a href="/" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-lg border border-stone-300 px-2.5 py-1.5 text-xs font-medium hover:bg-stone-50">
+            <ExternalLink className="h-3.5 w-3.5" /> Live page
+          </a>
           <Button size="sm" variant="primary" icon={<Rocket className="h-3.5 w-3.5" />} loading={publishing} onClick={publish}>Publish</Button>
         </div>
       </div>
@@ -400,9 +398,9 @@ export default function PageDesigner() {
                   </Select>
                 </Field>
                 <div className="rounded-lg border border-stone-200 bg-white p-3 text-sm">
-                  <div className="font-medium">Your page address</div>
-                  <div className="mt-1 break-all text-indigo-700">{window.location.origin}/t/{me.user.handle}</div>
-                  <Link to="/admin/profile" className="mt-1 inline-block text-xs text-stone-500 underline">Change handle, name and photo in Profile</Link>
+                  <div className="font-medium">Home page address</div>
+                  <div className="mt-1 break-all text-indigo-700">{window.location.origin}/</div>
+                  <Link to="/admin/system/settings" className="mt-1 inline-block text-xs text-stone-500 underline">Change the brand and site name in Site settings</Link>
                 </div>
                 <Button
                   variant="ghost"

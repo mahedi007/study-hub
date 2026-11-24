@@ -299,6 +299,14 @@ export function BlockEditor({
         </div>
       );
 
+    case 'teachers':
+      return (
+        <div className="space-y-3">
+          <HeadingField value={b.heading} onChange={(v) => upd({ heading: v }, 'heading')} />
+          <p className="text-xs text-stone-500">Shows every teacher who has published materials. Clicking a teacher filters the materials list on the same page.</p>
+        </div>
+      );
+
     case 'divider':
       return (
         <Field label="Style">

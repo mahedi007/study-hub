@@ -54,7 +54,7 @@ export default function Profile() {
           <ImagePicker label="Photo" value={form.avatar_asset} onChange={(v) => setForm({ ...form, avatar_asset: v })} compact />
           <div className="flex-1 space-y-3">
             <Field label="Display name"><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
-            <Field label="Page handle" hint={`${window.location.origin}/t/${form.handle || '…'}`}>
+            <Field label="Short name for links" hint={`Students see only your materials at ${window.location.origin}/?teacher=${form.handle || '…'}`}>
               <Input value={form.handle} onChange={(e) => setForm({ ...form, handle: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') })} />
             </Field>
           </div>

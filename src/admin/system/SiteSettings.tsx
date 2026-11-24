@@ -42,7 +42,8 @@ export default function SiteSettingsPage() {
           <div className="flex items-start gap-5">
             <ImagePicker label="Logo" value={s.logoAsset} onChange={(v) => set('logoAsset', v)} compact />
             <div className="flex-1 space-y-3">
-              <Field label="Site name"><Input value={s.siteName} onChange={(e) => set('siteName', e.target.value)} /></Field>
+              <Field label="Brand (top-left, e.g. Munjiba)"><Input value={s.brandName} onChange={(e) => set('brandName', e.target.value)} /></Field>
+              <Field label="Site name (top-right)"><Input value={s.siteName} onChange={(e) => set('siteName', e.target.value)} /></Field>
               <Field label="Tagline"><Input value={s.tagline} onChange={(e) => set('tagline', e.target.value)} /></Field>
             </div>
           </div>
@@ -51,20 +52,7 @@ export default function SiteSettingsPage() {
         </Card>
         <Card className="space-y-4 p-5">
           <h2 className="serif text-lg font-bold text-indigo-600">Home page</h2>
-          <Field label="What visitors see at /">
-            <Select value={s.homeMode} onChange={(e) => set('homeMode', e.target.value as SiteSettings['homeMode'])}>
-              <option value="directory">Directory of teachers + recent materials</option>
-              <option value="teacher">One teacher's page</option>
-            </Select>
-          </Field>
-          {s.homeMode === 'teacher' && (
-            <Field label="Teacher">
-              <Select value={s.homeTeacherHandle} onChange={(e) => set('homeTeacherHandle', e.target.value)}>
-                <option value="">Choose…</option>
-                {users.data?.users.filter((u) => u.handle).map((u) => <option key={u.handle} value={u.handle!}>{u.name} (/t/{u.handle})</option>)}
-              </Select>
-            </Field>
-          )}
+          <p className="text-sm text-stone-500">There is one home page for everyone. Edit its look in <b>Home page design</b>.</p>
           <Field label="Default student language">
             <Select value={s.defaultLanguage} onChange={(e) => set('defaultLanguage', e.target.value as SiteSettings['defaultLanguage'])}>
               <option value="bn">বাংলা</option>

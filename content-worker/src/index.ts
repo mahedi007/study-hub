@@ -1,6 +1,6 @@
 // Serves teacher-uploaded HTML bundles from R2 on a separate origin.
 // URL shape: /b/<signed token>/<path inside the bundle>
-import { AUTO_HEIGHT, materialPrefix, safePath, verifyToken } from '../../server/tokens';
+import { materialPrefix, safePath, verifyToken } from '../../server/tokens';
 import { mimeFor } from '../../shared/design';
 
 interface Env {
@@ -54,11 +54,6 @@ export default {
       headers.set('Content-Range', `bytes ${offset}-${offset + length - 1}/${obj.size}`);
       headers.set('Content-Length', String(length));
       return new Response(req.method === 'HEAD' ? null : obj.body, { status: 206, headers });
-    }
-    if (req.method !== 'HEAD' && headers.get('Content-Type')?.startsWith('text/html')) {
-      return new HTMLRewriter()
-        .onDocument({ end(end) { end.append(AUTO_HEIGHT, { html: true }); } })
-        .transform(new Response(obj.body, { headers }));
     }
     headers.set('Content-Length', String(obj.size));
     return new Response(req.method === 'HEAD' ? null : obj.body, { headers });

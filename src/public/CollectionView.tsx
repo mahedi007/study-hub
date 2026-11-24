@@ -124,7 +124,7 @@ export function CollectionView({
     <div>
       {backTo && (
         <PLink to={backTo} className="mb-4 inline-flex items-center gap-1.5 text-[15px] font-semibold hover:opacity-70" style={{ color: 'var(--tp-primary)' }}>
-          <ArrowLeft className="h-4 w-4" /> {backLabel ?? t(lang, 'back')}
+          <ArrowLeft className="h-4 w-4" /> {backLabel ?? (lang === 'bn' ? 'সব ম্যাটেরিয়াল' : 'All materials')}
         </PLink>
       )}
       <div className="grid gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">

@@ -90,12 +90,12 @@ function Sidebar({ me, onNavigate }: { me: Me; onNavigate?: () => void }) {
         <NavItem to="/admin/materials" icon={<FileStack className={ic} />}>Materials</NavItem>
         <NavItem to="/admin/collections" icon={<Layers className={ic} />}>Collections</NavItem>
         <NavItem to="/admin/links" icon={<Link2 className={ic} />}>Share links</NavItem>
-        <NavItem to="/admin/design" icon={<Palette className={ic} />}>Page designer</NavItem>
         <NavItem to="/admin/announcements" icon={<Megaphone className={ic} />}>Notices</NavItem>
         <NavItem to="/admin/profile" icon={<UserIcon className={ic} />}>Profile</NavItem>
         {me.user.role === 'admin' && (
           <>
             <div className="px-3.5 pb-1 pt-5 text-[11px] font-bold uppercase tracking-widest text-gold">Administration</div>
+            <NavItem to="/admin/design" icon={<Palette className={ic} />}>Home page design</NavItem>
             <NavItem to="/admin/system/teachers" icon={<Users className={ic} />}>Teachers</NavItem>
             <NavItem to="/admin/system/materials" icon={<ShieldCheck className={ic} />}>All materials</NavItem>
             <NavItem to="/admin/system/storage" icon={<HardDrive className={ic} />}>Storage & usage</NavItem>
@@ -114,11 +114,9 @@ function Sidebar({ me, onNavigate }: { me: Me; onNavigate?: () => void }) {
           </div>
           {!unlimited && <Progress value={pct} tone={pct > 90 ? 'red' : pct > 75 ? 'amber' : 'indigo'} className="bg-white/15" />}
         </div>
-        {me.user.handle && (
-          <a href={`/t/${me.user.handle}`} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-sm font-semibold text-gold hover:underline">
-            <ExternalLink className="h-4 w-4" /> View my public page
-          </a>
-        )}
+        <a href="/" target="_blank" rel="noreferrer" className="flex items-center gap-2 text-sm font-semibold text-gold hover:underline">
+          <ExternalLink className="h-4 w-4" /> View the site
+        </a>
         <div className="flex items-center gap-2">
           {me.user.avatar_url ? (
             <img src={me.user.avatar_url} alt="" className="h-9 w-9 rounded-full border-2 border-gold object-cover" />
@@ -221,11 +219,11 @@ function Workspace() {
                 <Route path="collections" element={<Collections />} />
                 <Route path="collections/:id" element={<CollectionEdit />} />
                 <Route path="links" element={<Links />} />
-                <Route path="design" element={<PageDesigner />} />
                 <Route path="announcements" element={<Announcements />} />
                 <Route path="profile" element={<Profile />} />
                 {data.user.role === 'admin' && (
                   <>
+                    <Route path="design" element={<PageDesigner />} />
                     <Route path="system/teachers" element={<Teachers />} />
                     <Route path="system/materials" element={<Materials scope="all" />} />
                     <Route path="system/storage" element={<Storage />} />

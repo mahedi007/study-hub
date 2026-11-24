@@ -39,6 +39,7 @@ export interface Material {
   title: string;
   description: string;
   kind: MaterialKind;
+  slug: string;
   icon: string;
   audio_file: string | null;
   file_name: string | null;
@@ -140,6 +141,7 @@ export interface SiteSettings {
   maxFileMb: number;
   defaultQuotaMb: number;
   footerText: string;
+  brandName: string;
   registration: 'closed' | 'approval' | 'open';
 }
 
@@ -224,12 +226,13 @@ export type Block =
   | (BlockBase & { type: 'faq'; heading: string; items: { q: string; a: string }[] })
   | (BlockBase & { type: 'gallery'; heading: string; assets: string[] })
   | (BlockBase & { type: 'stats'; heading: string })
+  | (BlockBase & { type: 'teachers'; heading: string })
   | (BlockBase & { type: 'divider'; style: 'line' | 'space' | 'dots' });
 
 export type BlockType = Block['type'];
 
 export interface PageDesign {
-  version: 1;
+  version: number;
   theme: Theme;
   layout: PageLayout;
   seo: { title: string; description: string };
@@ -245,10 +248,22 @@ export interface PublicTeacher {
   avatar_url: string | null;
 }
 
+export interface SiteTeacher extends PublicTeacher {
+  material_count: number;
+}
+
+export interface SiteInfo {
+  siteName: string;
+  brandName: string;
+  logoUrl: string | null;
+}
+
+/** Everything the single home page needs: all teachers' published content. */
 export interface PublicPageData {
-  teacher: PublicTeacher;
-  collections: Collection[];
+  site: SiteInfo;
+  teachers: SiteTeacher[];
+  collections: (Collection & { owner_name?: string; owner_handle?: string | null })[];
   materials: Material[];
-  announcements: Announcement[];
-  stats: { materials: number; collections: number; views: number };
+  announcements: (Announcement & { owner_name?: string })[];
+  stats: { materials: number; collections: number; views: number; teachers: number };
 }

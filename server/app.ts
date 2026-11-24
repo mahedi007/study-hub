@@ -16,6 +16,11 @@ app.onError((err, c) => {
   return c.json({ error: err instanceof Error ? err.message : 'Server error' }, 500);
 });
 
+// Never let browsers or the CDN keep API answers (deleted materials must vanish immediately).
+app.use('*', async (c, next) => {
+  await next();
+  if (!c.res.headers.has('Cache-Control')) c.res.headers.set('Cache-Control', 'no-store');
+});
 app.use('/admin/*', sameOrigin);
 app.use('/auth/*', sameOrigin);
 app.route('/auth', authRoutes);

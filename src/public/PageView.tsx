@@ -1,7 +1,9 @@
 import type { PageDesign, PublicPageData } from '../../shared/types';
 import type { Lang } from '../lib/i18n';
 import { ThemedShell } from './ThemedShell';
-import { BlockView } from './blocks/Blocks';
+import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { BlockView, TeacherFilter } from './blocks/Blocks';
 
 export function PageView({
   design,
@@ -21,8 +23,22 @@ export function PageView({
   onSelect?: (id: string) => void;
 }) {
   const ctx = { data, lang, preview, layout: design.layout };
+  const [params, setParams] = useSearchParams();
+  const [previewTeacher, setPreviewTeacher] = useState('');
+  const filter: [string, (h: string) => void] = preview
+    ? [previewTeacher, setPreviewTeacher]
+    : [
+        params.get('teacher') ?? '',
+        (h) => {
+          const next = new URLSearchParams(params);
+          if (h) next.set('teacher', h);
+          else next.delete('teacher');
+          setParams(next, { replace: true, preventScrollReset: true });
+        },
+      ];
   return (
-    <ThemedShell theme={design.theme} teacher={data.teacher} lang={lang} setLang={setLang} layout={design.layout} preview={preview}>
+    <TeacherFilter.Provider value={filter}>
+    <ThemedShell theme={design.theme} site={data.site} lang={lang} setLang={setLang} layout={design.layout} preview={preview}>
       <div className="space-y-12">
         {design.blocks
           .filter((b) => b.visible)
@@ -43,5 +59,6 @@ export function PageView({
           )}
       </div>
     </ThemedShell>
+    </TeacherFilter.Provider>
   );
 }

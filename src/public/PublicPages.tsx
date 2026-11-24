@@ -1,18 +1,15 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { Navigate, useParams } from 'react-router-dom';
+import { useEffect, useState, type FormEvent } from 'react';
+import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Lock, Search, Users } from 'lucide-react';
+import { Lock } from 'lucide-react';
 import { api, ApiError } from '../lib/api';
 import { t, useLang, type Lang } from '../lib/i18n';
-import { presetTheme } from '../../shared/design';
-import type { Collection, CollectionItem, Material, MaterialAccess, PageDesign, PublicPageData, PublicTeacher, SiteSettings, Theme } from '../../shared/types';
+import { presetTheme, topicPath } from '../../shared/design';
+import type { Collection, CollectionItem, Material, MaterialAccess, PageDesign, PublicPageData, PublicTeacher, SiteInfo, Theme } from '../../shared/types';
 import { PageView } from './PageView';
-import { Brand, LangToggle, PLink, ThemedShell } from './ThemedShell';
-import { SquiggleTitle, lastWord } from './Squiggle';
+import { PLink, ThemedShell } from './ThemedShell';
 import { MaterialView } from './MaterialView';
 import { CollectionView } from './CollectionView';
-import { MaterialCard, num } from './blocks/Blocks';
-import { renderMarkdown } from '../lib/markdown';
 
 const DEFAULT_THEME = presetTheme('munjiba');
 
@@ -22,15 +19,15 @@ function useTitle(title?: string) {
   }, [title]);
 }
 
-function Status({ theme = DEFAULT_THEME, title, message, lang = 'bn' }: { theme?: Theme; title: string; message?: string; lang?: Lang }) {
+function Status({ theme = DEFAULT_THEME, site, title, message, lang = 'bn' }: { theme?: Theme; site?: SiteInfo; title: string; message?: string; lang?: Lang }) {
   const [l, setL] = useLang(lang);
   return (
-    <ThemedShell theme={theme} lang={l} setLang={setL} layout={{ width: 'narrow', headerStyle: 'none' }}>
-      <div className="tp-card mx-auto mt-20 max-w-md p-10 text-center">
+    <ThemedShell theme={theme} site={site} lang={l} setLang={setL} layout={{ width: 'narrow' }}>
+      <div className="tp-card mx-auto mt-14 max-w-md p-10 text-center">
         <h1 className="tp-h text-3xl font-bold">{title}</h1>
         {message && <p className="tp-muted mt-2">{message}</p>}
         <PLink to="/" className="tp-btn mt-6">
-          {t(l, 'home')}
+          ← {l === 'bn' ? 'মূল পাতায় ফিরে যাও' : 'Back to home'}
         </PLink>
       </div>
     </ThemedShell>
@@ -45,104 +42,15 @@ function Loading({ theme = DEFAULT_THEME }: { theme?: Theme }) {
   );
 }
 
-// ---------- Home ----------
-
-type SiteResponse = {
-  homeTeacher: string | null;
-  settings: SiteSettings & { logoUrl: string | null };
-  teachers: (PublicTeacher & { material_count: number })[];
-  recent: Material[];
-};
+// ---------- The single home page (all teachers' materials) ----------
 
 export function HomePage() {
-  const { data, error, isLoading } = useQuery({ queryKey: ['site'], queryFn: () => api<SiteResponse>('/api/public/site') });
-  const [lang, setLang] = useLang(data?.settings.defaultLanguage ?? 'bn');
-  const [q, setQ] = useState('');
-  useTitle(data?.settings.siteName);
-  const recent = useMemo(() => {
-    const needle = q.trim().toLowerCase();
-    return (data?.recent ?? []).filter((m) => !needle || `${m.title} ${m.subject} ${m.class_level} ${m.owner_name}`.toLowerCase().includes(needle));
-  }, [data, q]);
-
-  if (isLoading) return <Loading />;
-  if (error || !data) return <Status title="Study Hub" message={(error as Error)?.message} />;
-  if (data.homeTeacher) return <TeacherPage handleOverride={data.homeTeacher} />;
-
-  const s = data.settings;
-  return (
-    <ThemedShell theme={DEFAULT_THEME} lang={lang} setLang={setLang} layout={{ width: 'normal', headerStyle: 'none' }} footer={false}>
-      <div className="flex items-center justify-between py-1">
-        <Brand name={s.siteName} avatar={s.logoUrl} />
-        <LangToggle lang={lang} setLang={setLang} />
-      </div>
-      <section className="pb-4 pt-10">
-        <span className="tp-kicker">{lang === 'bn' ? 'অডিও · অনুশীলন · নোট' : 'Audio · Practice · Notes'}</span>
-        <h1 className="tp-h mt-4 text-[clamp(38px,9vw,70px)] font-extrabold leading-[1.3]">
-          <SquiggleTitle text={s.siteName} highlight={lastWord(s.siteName)} />
-        </h1>
-        {s.tagline && <p className="tp-muted mt-5 max-w-[34em] text-[19px]">{s.tagline}</p>}
-        {s.bannerText && <div className="tp-card tp-prose mt-6 max-w-2xl px-5 py-3" style={{ background: 'var(--tp-accent-soft)' }} dangerouslySetInnerHTML={{ __html: renderMarkdown(s.bannerText) }} />}
-      </section>
-
-      {data.teachers.length > 0 && (
-        <section className="mb-14 mt-8">
-          <h2 className="tp-h mb-5 flex items-center gap-2 text-2xl font-bold">
-            <Users className="h-6 w-6" /> {t(lang, 'teachers')}
-          </h2>
-          <div className="grid gap-[26px] grid-cols-[repeat(auto-fill,minmax(250px,1fr))]">
-            {data.teachers.map((tch, i) => (
-              <PLink key={tch.id} to={`/t/${tch.handle}`} className="tp-card tp-enter flex items-center gap-4 p-4" style={{ animationDelay: `${i * 70}ms` }}>
-                {tch.avatar_url ? (
-                  <img src={tch.avatar_url} alt="" className="h-14 w-14 rounded-full object-cover" style={{ border: '1.5px solid var(--tp-ink)' }} />
-                ) : (
-                  <span className="tp-h flex h-14 w-14 items-center justify-center rounded-full text-xl font-bold" style={{ background: 'var(--tp-primary)', color: 'var(--tp-accent)' }}>
-                    {(tch.name || '?').slice(0, 1).toUpperCase()}
-                  </span>
-                )}
-                <div className="min-w-0">
-                  <div className="tp-h truncate text-lg font-bold">{tch.name}</div>
-                  <div className="tp-muted text-sm">
-                    {num(tch.material_count, lang)} {t(lang, 'materials_count')}
-                  </div>
-                </div>
-              </PLink>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {data.recent.length > 0 && (
-        <section>
-          <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <h2 className="tp-h text-2xl font-bold">{t(lang, 'recent')}</h2>
-            <label className="tp-search sm:w-80">
-              <Search className="h-5 w-5" style={{ color: 'var(--tp-primary)' }} />
-              <input placeholder={lang === 'bn' ? 'খুঁজে দেখো...' : 'Search…'} value={q} onChange={(e) => setQ(e.target.value)} />
-            </label>
-          </div>
-          <div className="grid gap-[26px] grid-cols-[repeat(auto-fill,minmax(270px,1fr))]">
-            {recent.map((m, i) => (
-              <MaterialCard key={m.id} m={m} handle={m.owner_handle ?? ''} view="grid" lang={lang} index={i} />
-            ))}
-          </div>
-        </section>
-      )}
-      <footer className="tp-muted pb-10 pt-14 text-center text-sm">©2026 - Munjiba Miss</footer>
-    </ThemedShell>
-  );
-}
-
-// ---------- Teacher page ----------
-
-export function TeacherPage({ handleOverride }: { handleOverride?: string }) {
-  const params = useParams();
-  const handle = handleOverride ?? params.handle ?? '';
   const { data, error, isLoading } = useQuery({
-    queryKey: ['page', handle],
-    queryFn: () => api<{ design: PageDesign; data: PublicPageData }>(`/api/public/page/${encodeURIComponent(handle)}`),
+    queryKey: ['home'],
+    queryFn: () => api<{ design: PageDesign; data: PublicPageData }>('/api/public/home'),
   });
   const [lang, setLang] = useLang(data?.design.language ?? 'bn');
-  useTitle(data ? data.design.seo.title || data.data.teacher.name : undefined);
+  useTitle(data ? data.design.seo.title || data.data.site.siteName : undefined);
   useEffect(() => {
     if (!data?.design.seo.description) return;
     let meta = document.querySelector('meta[name="description"]');
@@ -158,43 +66,76 @@ export function TeacherPage({ handleOverride }: { handleOverride?: string }) {
   return <PageView design={data.design} data={data.data} lang={lang} setLang={setLang} />;
 }
 
-// ---------- Material & collection pages on a teacher site ----------
+/** Old teacher pages (/t/<handle>) now open the home page filtered to that teacher. */
+export function LegacyTeacherPage() {
+  const { handle = '' } = useParams();
+  return <Navigate to={`/?teacher=${encodeURIComponent(handle)}`} replace />;
+}
 
-type MaterialResponse = { material: Material; access: MaterialAccess; teacher: PublicTeacher; theme: Theme; language: Lang };
+/** Old material links (/t/<handle>/m/<id>) forward to /topic/<slug>. */
+export function LegacyMaterialPage() {
+  const { id = '' } = useParams();
+  const { data, error } = useQuery({ queryKey: ['legacy-m', id], queryFn: () => api<{ slug: string }>(`/api/public/m/${id}`), retry: false });
+  useEffect(() => {
+    if (data?.slug) window.location.replace(`/topic/${data.slug}`);
+  }, [data]);
+  if (error) return <Status title="খুঁজে পাওয়া যায়নি" message={(error as Error).message} />;
+  return <Loading />;
+}
 
-export function MaterialPage() {
-  const { handle = '', id = '' } = useParams();
-  const { data, error, isLoading } = useQuery({ queryKey: ['pub-m', id], queryFn: () => api<MaterialResponse>(`/api/public/m/${id}`), staleTime: 10 * 60 * 1000 });
+export function LegacyCollectionPage() {
+  const { id = '' } = useParams();
+  return <Navigate to={`/c/${id}`} replace />;
+}
+
+// ---------- /topic/<slug> ----------
+
+type TopicResponse = { material: Material; access: MaterialAccess; teacher: PublicTeacher; theme: Theme; language: Lang; site: SiteInfo };
+
+export function TopicPage() {
+  const { slug = '' } = useParams();
+  const { data, error, isLoading } = useQuery({ queryKey: ['topic', slug], queryFn: () => api<TopicResponse>(`/api/public/topic/${encodeURIComponent(slug)}`), staleTime: 10 * 60 * 1000 });
   const [lang, setLang] = useLang(data?.language ?? 'bn');
   useTitle(data?.material.title);
+
+  // HTML lessons are standalone pages served by the server — load them for real (once, to avoid loops).
+  useEffect(() => {
+    if (data?.material.kind !== 'html' || !data.access.bundleUrl) return;
+    const guard = `studyhub.topic-redirect.${slug}`;
+    if (sessionStorage.getItem(guard)) return;
+    sessionStorage.setItem(guard, '1');
+    window.location.replace(data.access.bundleUrl);
+  }, [data, slug]);
+
   if (isLoading) return <Loading />;
   if (error || !data) return <Status title={t(lang, 'not_found')} message={(error as Error)?.message} />;
   return (
-    <ThemedShell theme={data.theme} teacher={data.teacher} lang={lang} setLang={setLang}>
-      <MaterialView material={data.material} access={data.access} lang={lang} backTo={`/t/${handle}`} teacher={data.teacher} />
+    <ThemedShell theme={data.theme} site={data.site} lang={lang} setLang={setLang}>
+      <MaterialView material={data.material} access={data.access} lang={lang} backTo="/" teacher={data.teacher} />
     </ThemedShell>
   );
 }
 
-type CollectionResponse = { collection: Collection; items: CollectionItem[]; teacher: PublicTeacher; theme: Theme; language: Lang };
+// ---------- Collections ----------
+
+type CollectionResponse = { collection: Collection; items: CollectionItem[]; teacher: PublicTeacher; theme: Theme; language: Lang; site: SiteInfo };
 
 export function CollectionPage() {
-  const { handle = '', id = '' } = useParams();
+  const { id = '' } = useParams();
   const { data, error, isLoading } = useQuery({ queryKey: ['pub-c', id], queryFn: () => api<CollectionResponse>(`/api/public/c/${id}`) });
   const [lang, setLang] = useLang(data?.language ?? 'bn');
   useTitle(data?.collection.title);
   if (isLoading) return <Loading />;
   if (error || !data) return <Status title={t(lang, 'not_found')} message={(error as Error)?.message} />;
   return (
-    <ThemedShell theme={data.theme} teacher={data.teacher} lang={lang} setLang={setLang} layout={{ width: 'wide' }}>
+    <ThemedShell theme={data.theme} site={data.site} lang={lang} setLang={setLang} layout={{ width: 'wide' }}>
       <CollectionView
         collection={data.collection}
         items={data.items}
         lang={lang}
         progressKey={`c-${id}`}
         loadItem={(mid) => api(`/api/public/c/${id}/m/${mid}`)}
-        backTo={`/t/${handle}`}
-        backLabel={data.teacher.name}
+        backTo="/"
       />
     </ThemedShell>
   );
@@ -208,6 +149,7 @@ type ShareResponse = {
   teacher: PublicTeacher;
   theme: Theme;
   language: Lang;
+  site: SiteInfo;
   label: string;
   type?: 'material' | 'collection' | 'page';
   handle?: string;
@@ -220,6 +162,7 @@ type ShareResponse = {
 export function SharePage() {
   const { slug = '' } = useParams();
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const storeKey = `studyhub.pass.${slug}`;
   const [passcode, setPasscode] = useState(() => sessionStorage.getItem(storeKey) ?? '');
   const headers = passcode ? { 'X-Passcode': passcode } : undefined;
@@ -240,6 +183,13 @@ export function SharePage() {
   const [lang, setLang] = useLang(data?.language ?? 'bn');
   useTitle(data?.material?.title ?? data?.collection?.title ?? data?.label);
 
+  useEffect(() => {
+    if (data?.status !== 'ok') return;
+    if (data.type === 'page') navigate(data.handle ? `/?teacher=${encodeURIComponent(data.handle)}` : '/', { replace: true });
+    // A shared HTML lesson opens as its own standalone page.
+    if (data.type === 'material' && data.material?.kind === 'html' && data.access?.bundleUrl) window.location.replace(data.access.bundleUrl);
+  }, [data, navigate]);
+
   if (query.isLoading) return <Loading />;
   if (query.error || !data) {
     const e = query.error as ApiError;
@@ -249,7 +199,7 @@ export function SharePage() {
     return (
       <PasscodeGate
         theme={data.theme}
-        teacher={data.teacher}
+        site={data.site}
         lang={lang}
         setLang={setLang}
         wrong={!!data.wrong}
@@ -262,11 +212,11 @@ export function SharePage() {
       />
     );
   }
-  if (data.type === 'page' && data.handle) return <Navigate to={`/t/${data.handle}`} replace />;
+  if (data.type === 'page') return <Loading theme={data.theme} />;
 
   return (
-    <ThemedShell theme={data.theme} teacher={data.teacher} lang={lang} setLang={setLang} layout={{ width: data.type === 'collection' ? 'wide' : 'normal' }}>
-      {data.type === 'material' && data.material && data.access && <MaterialView material={data.material} access={data.access} lang={lang} teacher={data.teacher} />}
+    <ThemedShell theme={data.theme} site={data.site} lang={lang} setLang={setLang} layout={{ width: data.type === 'collection' ? 'wide' : 'normal' }}>
+      {data.type === 'material' && data.material && data.access && <MaterialView material={data.material} access={data.access} lang={lang} backTo="/" />}
       {data.type === 'collection' && data.collection && (
         <CollectionView
           collection={data.collection}
@@ -274,6 +224,7 @@ export function SharePage() {
           lang={lang}
           progressKey={`s-${slug}`}
           loadItem={(mid) => api(`/api/public/s/${slug}/m/${mid}`, { headers })}
+          backTo="/"
         />
       )}
     </ThemedShell>
@@ -282,7 +233,7 @@ export function SharePage() {
 
 function PasscodeGate({
   theme,
-  teacher,
+  site,
   lang,
   setLang,
   wrong,
@@ -290,7 +241,7 @@ function PasscodeGate({
   onSubmit,
 }: {
   theme: Theme;
-  teacher: PublicTeacher;
+  site: SiteInfo;
   lang: Lang;
   setLang: (l: Lang) => void;
   wrong: boolean;
@@ -303,7 +254,7 @@ function PasscodeGate({
     if (code.trim()) onSubmit(code.trim());
   };
   return (
-    <ThemedShell theme={theme} teacher={teacher} lang={lang} setLang={setLang} layout={{ width: 'narrow' }}>
+    <ThemedShell theme={theme} site={site} lang={lang} setLang={setLang} layout={{ width: 'narrow' }}>
       <form onSubmit={submit} className="tp-card mx-auto mt-12 max-w-sm p-8 text-center">
         <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full" style={{ background: 'var(--tp-accent-soft)', color: 'var(--tp-primary)', border: '1.5px solid var(--tp-ink)' }}>
           <Lock className="h-6 w-6" />
@@ -315,7 +266,12 @@ function PasscodeGate({
         <button type="submit" className="tp-btn mt-5 w-full">
           {t(lang, 'unlock')}
         </button>
+        <PLink to="/" className="tp-muted mt-4 block text-sm font-semibold hover:underline">
+          ← {lang === 'bn' ? 'মূল পাতায় ফিরে যাও' : 'Back to home'}
+        </PLink>
       </form>
     </ThemedShell>
   );
 }
+
+export { topicPath };

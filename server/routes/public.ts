@@ -3,9 +3,10 @@ import type { AppEnv, Env } from '../env';
 import { fail } from '../env';
 import { assetUrl, getSettings, mapAnnouncement, mapCollection, mapMaterial, now, today, verifyPasscode } from '../util';
 import { buildAccess, serveObject } from '../storage';
-import { AUTO_HEIGHT, assetKey, materialPrefix, safePath, verifyToken } from '../tokens';
+import { assetKey, materialPrefix, safePath, verifyToken } from '../tokens';
+import { superAdminEmail } from '../auth';
 import { defaultDesign, normalizeDesign } from '../../shared/design';
-import type { Material, PageDesign, PublicPageData, PublicTeacher, User } from '../../shared/types';
+import type { Material, PageDesign, PublicPageData, PublicTeacher, SiteInfo } from '../../shared/types';
 
 const r = new Hono<AppEnv>();
 
@@ -18,50 +19,86 @@ function listMaterial(m: Material): Material {
   return { ...m, body_md: null };
 }
 
-async function teacherDesign(env: Env, ownerId: string, name: string): Promise<PageDesign> {
-  const row = await env.DB.prepare(`SELECT published_json FROM page_designs WHERE owner_id = ?`).bind(ownerId).first<{ published_json: string | null }>();
-  if (row?.published_json) {
+const MATERIAL_WITH_OWNER = `SELECT m.*, u.name AS owner_name, u.handle AS owner_handle FROM materials m JOIN users u ON u.id = m.owner_id`;
+
+// ---------- Site design (one home page for the whole site) ----------
+
+async function readDesign(env: Env, key: 'design_published' | 'design_draft'): Promise<PageDesign | null> {
+  const row = await env.DB.prepare(`SELECT value FROM settings WHERE key = ?`).bind(key).first<{ value: string }>();
+  if (row?.value) {
     try {
-      return normalizeDesign(JSON.parse(row.published_json), name);
+      return normalizeDesign(JSON.parse(row.value));
     } catch {
-      /* fall through */
+      /* ignore */
     }
   }
-  return defaultDesign(name || 'Classroom');
+  return null;
 }
 
-async function activeTeacherById(env: Env, id: string) {
-  const u = await env.DB.prepare(`SELECT * FROM users WHERE id = ? AND status = 'active'`).bind(id).first<any>();
-  if (!u) fail(404, 'Not found');
-  return u;
+/** Earlier versions stored one design per teacher; reuse the super admin's as the starting point. */
+async function legacyDesign(env: Env): Promise<PageDesign | null> {
+  const row = await env.DB.prepare(
+    `SELECT p.published_json, p.draft_json FROM page_designs p JOIN users u ON u.id = p.owner_id
+     ORDER BY (u.email = ?) DESC, (u.role = 'admin') DESC, p.published_at DESC LIMIT 1`,
+  )
+    .bind(superAdminEmail(env))
+    .first<{ published_json: string | null; draft_json: string }>();
+  const raw = row?.published_json ?? row?.draft_json;
+  if (!raw) return null;
+  try {
+    return normalizeDesign(JSON.parse(raw));
+  } catch {
+    return null;
+  }
 }
 
-export async function buildPageData(env: Env, user: Pick<User, 'id'> & Record<string, any>): Promise<PublicPageData> {
+export async function siteDesign(env: Env, which: 'published' | 'draft' = 'published'): Promise<PageDesign> {
+  if (which === 'draft') {
+    const draft = await readDesign(env, 'design_draft');
+    if (draft) return draft;
+  }
+  return (await readDesign(env, 'design_published')) ?? (await legacyDesign(env)) ?? defaultDesign();
+}
+
+export async function siteInfo(env: Env): Promise<SiteInfo> {
+  const s = await getSettings(env);
+  return { siteName: s.siteName, brandName: s.brandName, logoUrl: assetUrl(s.logoAsset) };
+}
+
+export async function buildSiteData(env: Env): Promise<PublicPageData> {
   const t = now();
-  const [mats, cols, anns] = await Promise.all([
-    env.DB.prepare(`SELECT * FROM materials WHERE owner_id = ? AND status = 'published' AND ready = 1 ORDER BY updated_at DESC LIMIT 1000`).bind(user.id).all(),
+  const [mats, cols, anns, teachers, site] = await Promise.all([
+    env.DB.prepare(`${MATERIAL_WITH_OWNER} WHERE m.status = 'published' AND m.ready = 1 AND u.status = 'active' ORDER BY m.created_at DESC LIMIT 3000`).all(),
     env.DB.prepare(
-      `SELECT c.*, (SELECT COUNT(*) FROM collection_items ci JOIN materials m ON m.id = ci.material_id WHERE ci.collection_id = c.id AND m.status != 'draft') AS item_count
-       FROM collections c WHERE owner_id = ? AND status = 'published' ORDER BY updated_at DESC`,
-    )
-      .bind(user.id)
-      .all(),
+      `SELECT c.*, u.name AS owner_name, u.handle AS owner_handle,
+         (SELECT COUNT(*) FROM collection_items ci JOIN materials m ON m.id = ci.material_id WHERE ci.collection_id = c.id AND m.status != 'draft') AS item_count
+       FROM collections c JOIN users u ON u.id = c.owner_id WHERE c.status = 'published' AND u.status = 'active' ORDER BY c.updated_at DESC`,
+    ).all<any>(),
     env.DB.prepare(
-      `SELECT * FROM announcements WHERE owner_id = ? AND (expires_at IS NULL OR expires_at > ?) ORDER BY pinned DESC, created_at DESC LIMIT 50`,
+      `SELECT a.*, u.name AS owner_name FROM announcements a JOIN users u ON u.id = a.owner_id
+       WHERE u.status = 'active' AND (a.expires_at IS NULL OR a.expires_at > ?) ORDER BY a.pinned DESC, a.created_at DESC LIMIT 50`,
     )
-      .bind(user.id, t)
-      .all(),
+      .bind(t)
+      .all<any>(),
+    env.DB.prepare(
+      `SELECT u.*, (SELECT COUNT(*) FROM materials m WHERE m.owner_id = u.id AND m.status = 'published' AND m.ready = 1) AS material_count
+       FROM users u WHERE u.status = 'active' AND u.handle IS NOT NULL ORDER BY material_count DESC, u.name`,
+    ).all<any>(),
+    siteInfo(env),
   ]);
   const materials = mats.results.map(mapMaterial).map(listMaterial);
+  const teacherList = teachers.results.filter((u) => Number(u.material_count) > 0).map((u) => ({ ...publicTeacher(u), material_count: Number(u.material_count) }));
   return {
-    teacher: publicTeacher(user),
+    site,
+    teachers: teacherList,
     materials,
-    collections: cols.results.map(mapCollection),
-    announcements: anns.results.map(mapAnnouncement),
+    collections: cols.results.map((c) => ({ ...mapCollection(c), owner_name: c.owner_name, owner_handle: c.owner_handle })),
+    announcements: anns.results.map((a) => ({ ...mapAnnouncement(a), owner_name: a.owner_name })),
     stats: {
       materials: materials.length,
       collections: cols.results.length,
       views: materials.reduce((s, m) => s + m.view_count, 0),
+      teachers: teacherList.length,
     },
   };
 }
@@ -92,58 +129,49 @@ async function collectionItems(env: Env, collectionId: string) {
   return results.map((row: any) => ({ material_id: row.id, section: row.section, position: row.position, material: listMaterial(mapMaterial(row)) }));
 }
 
-// ---------- Site & teacher pages ----------
+async function pageContext(env: Env) {
+  const [design, site] = await Promise.all([siteDesign(env), siteInfo(env)]);
+  return { theme: design.theme, language: design.language, site };
+}
 
-r.get('/public/site', async (c) => {
-  const [settings, teachers, recent] = await Promise.all([
-    getSettings(c.env),
-    c.env.DB.prepare(
-      `SELECT u.*, (SELECT COUNT(*) FROM materials m WHERE m.owner_id = u.id AND m.status = 'published' AND m.ready = 1) AS material_count
-       FROM users u WHERE u.status = 'active' AND u.handle IS NOT NULL ORDER BY material_count DESC, u.name LIMIT 200`,
-    ).all<any>(),
-    c.env.DB.prepare(
-      `SELECT m.*, u.name AS owner_name, u.handle AS owner_handle FROM materials m JOIN users u ON u.id = m.owner_id
-       WHERE m.status = 'published' AND m.ready = 1 AND u.status = 'active' ORDER BY m.updated_at DESC LIMIT 24`,
-    ).all(),
-  ]);
-  const homeTeacher =
-    settings.homeMode === 'teacher' && settings.homeTeacherHandle
-      ? ((await c.env.DB.prepare(`SELECT handle FROM users WHERE handle = ? AND status = 'active'`).bind(settings.homeTeacherHandle).first<{ handle: string }>())?.handle ?? null)
-      : null;
-  return c.json({
-    homeTeacher,
-    settings: { ...settings, logoUrl: assetUrl(settings.logoAsset) },
-    teachers: teachers.results.filter((t) => t.material_count > 0 || t.role === 'teacher').map((t) => ({ ...publicTeacher(t), material_count: Number(t.material_count) })),
-    recent: recent.results.map(mapMaterial).map(listMaterial),
-  });
-});
+// ---------- Home ----------
 
-r.get('/public/page/:handle', async (c) => {
-  const u = await c.env.DB.prepare(`SELECT * FROM users WHERE handle = ? AND status = 'active'`).bind(c.req.param('handle').toLowerCase()).first<any>();
-  if (!u) fail(404, 'Teacher not found');
-  const [design, data] = await Promise.all([teacherDesign(c.env, u.id, u.name), buildPageData(c.env, u)]);
+r.get('/public/home', async (c) => {
+  const [design, data] = await Promise.all([siteDesign(c.env), buildSiteData(c.env)]);
   return c.json({ design, data });
 });
 
+/** Old `/t/<teacher>/m/<id>` links: tell the app where the material lives now. */
 r.get('/public/m/:id', async (c) => {
-  const row = await c.env.DB.prepare(`SELECT * FROM materials WHERE id = ? AND status = 'published' AND ready = 1`).bind(c.req.param('id')).first();
+  const row = await c.env.DB.prepare(`SELECT slug FROM materials WHERE id = ? AND status != 'draft'`).bind(c.req.param('id')).first<{ slug: string }>();
+  if (!row) fail(404, 'Material not found');
+  return c.json({ slug: row!.slug });
+});
+
+r.get('/public/topic/:slug', async (c) => {
+  const row = await c.env.DB.prepare(`${MATERIAL_WITH_OWNER} WHERE m.slug = ? AND m.status != 'draft' AND m.ready = 1 AND u.status = 'active'`)
+    .bind(c.req.param('slug').toLowerCase())
+    .first();
   if (!row) fail(404, 'Material not found');
   const m = mapMaterial(row);
-  const u = await activeTeacherById(c.env, m.owner_id);
-  const origin = new URL(c.req.url).origin;
-  const [design, access] = await Promise.all([teacherDesign(c.env, u.id, u.name), buildAccess(c.env, m, origin, m.allow_download)]);
+  const owner = await c.env.DB.prepare(`SELECT * FROM users WHERE id = ?`).bind(m.owner_id).first<any>();
+  const [ctx, access] = await Promise.all([pageContext(c.env), buildAccess(c.env, m, new URL(c.req.url).origin, m.allow_download)]);
   countView(c, m.owner_id, { material: m.id });
-  return c.json({ material: m, access, teacher: publicTeacher(u), theme: design.theme, language: design.language });
+  return c.json({ material: m, access, teacher: publicTeacher(owner), ...ctx });
 });
 
 r.get('/public/c/:id', async (c) => {
-  const row = await c.env.DB.prepare(`SELECT * FROM collections WHERE id = ? AND status = 'published'`).bind(c.req.param('id')).first();
+  const row = await c.env.DB.prepare(
+    `SELECT c.* FROM collections c JOIN users u ON u.id = c.owner_id WHERE c.id = ? AND c.status = 'published' AND u.status = 'active'`,
+  )
+    .bind(c.req.param('id'))
+    .first();
   if (!row) fail(404, 'Collection not found');
   const col = mapCollection(row);
-  const u = await activeTeacherById(c.env, col.owner_id);
-  const [design, items] = await Promise.all([teacherDesign(c.env, u.id, u.name), collectionItems(c.env, col.id)]);
+  const owner = await c.env.DB.prepare(`SELECT * FROM users WHERE id = ?`).bind(col.owner_id).first<any>();
+  const [ctx, items] = await Promise.all([pageContext(c.env), collectionItems(c.env, col.id)]);
   countView(c, col.owner_id, { collection: col.id });
-  return c.json({ collection: col, items, teacher: publicTeacher(u), theme: design.theme, language: design.language });
+  return c.json({ collection: col, items, teacher: publicTeacher(owner), ...ctx });
 });
 
 r.get('/public/c/:id/m/:mid', async (c) => {
@@ -166,7 +194,8 @@ async function resolveLink(c: any) {
   const link: any = await c.env.DB.prepare(`SELECT * FROM share_links WHERE slug = ?`).bind(c.req.param('slug')).first();
   if (!link || !link.active) fail(404, 'This link does not exist or was turned off.');
   if (link.expires_at && link.expires_at < now()) fail(410, 'This link has expired.');
-  const owner = await activeTeacherById(c.env, link.owner_id);
+  const owner: any = await c.env.DB.prepare(`SELECT * FROM users WHERE id = ? AND status = 'active'`).bind(link.owner_id).first();
+  if (!owner) fail(404, 'Not found');
   if (link.passcode_hash) {
     const code = c.req.header('X-Passcode') ?? '';
     if (!code || !(await verifyPasscode(code, link.passcode_hash))) {
@@ -178,8 +207,8 @@ async function resolveLink(c: any) {
 
 r.get('/public/s/:slug', async (c) => {
   const { link, owner, locked, wrong } = await resolveLink(c);
-  const design = await teacherDesign(c.env, owner.id, owner.name);
-  const base = { teacher: publicTeacher(owner), theme: design.theme, language: design.language, label: link.label };
+  const ctx = await pageContext(c.env);
+  const base = { teacher: publicTeacher(owner), ...ctx, label: link.label };
   if (locked) return c.json({ ...base, status: 'passcode', wrong }, wrong ? 403 : 401);
 
   const origin = new URL(c.req.url).origin;
@@ -249,8 +278,7 @@ r.get('/file/:token/*', async (c) => {
   });
 });
 
-// Fallback bundle server on the main origin. The CSP sandbox gives the document an opaque origin,
-// so teacher scripts cannot read this site's cookies or call its API with credentials.
+/** Private (signed, expiring) copy of an HTML lesson — used for drafts opened through share links. Served untouched. */
 r.get('/bundle/b/:token/*', async (c) => {
   if (!c.env.SIGNING_KEY) fail(500, 'SIGNING_KEY not set');
   const token = c.req.param('token');
@@ -260,18 +288,7 @@ r.get('/bundle/b/:token/*', async (c) => {
   if (!rel || rel.endsWith('/')) rel += 'index.html';
   const path = safePath(rel);
   if (!path) fail(400, 'Bad path');
-  const res = await serveObject(c.env, materialPrefix(id) + path, c.req.raw, {
-    extraHeaders: {
-      'Content-Security-Policy': 'sandbox allow-scripts allow-forms allow-popups allow-modals allow-downloads',
-      'Access-Control-Allow-Origin': '*',
-    },
-  });
-  if (res.status !== 200 || !res.headers.get('Content-Type')?.startsWith('text/html')) return res;
-  const headers = new Headers(res.headers);
-  headers.delete('Content-Length');
-  return new HTMLRewriter()
-    .onDocument({ end(end) { end.append(AUTO_HEIGHT, { html: true }); } })
-    .transform(new Response(res.body, { status: 200, headers }));
+  return serveObject(c.env, materialPrefix(id) + path, c.req.raw, { cacheControl: 'private, max-age=300' });
 });
 
 r.get('/assets/:id', async (c) => {

@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react';
-import { ArrowRight, ChevronDown, Facebook, Mail, MapPin, Phone, Pin, Search, Youtube, MessageCircle, ExternalLink } from 'lucide-react';
+import { createContext, useContext, useMemo, useRef, useState } from 'react';
+import { ArrowRight, ChevronDown, X, Facebook, Mail, MapPin, Phone, Pin, Search, Youtube, MessageCircle, ExternalLink } from 'lucide-react';
 import type { Block, Collection, Material, PageLayout, PublicPageData } from '../../../shared/types';
-import { KIND_LABELS, bnNum, iconFor, isNew } from '../../../shared/design';
+import { KIND_LABELS, bnNum, iconFor, isNew, topicPath } from '../../../shared/design';
 import { renderMarkdown } from '../../lib/markdown';
 import { toEmbedUrl } from '../../lib/embed';
 import { t, type Lang } from '../../lib/i18n';
@@ -16,6 +16,9 @@ export interface BlockCtx {
 }
 
 const assetSrc = (id: string | null) => (id ? `/api/assets/${id}` : '');
+
+/** Which teacher's materials the home page is filtered to ('' = everyone). Provided by PageView. */
+export const TeacherFilter = createContext<[string, (handle: string) => void]>(['', () => undefined]);
 
 export function niceDate(ts: number, lang: Lang) {
   return new Date(ts).toLocaleDateString(lang === 'bn' ? 'bn-BD' : 'en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
@@ -46,12 +49,13 @@ function Tags({ m, lang }: { m: Material; lang: Lang }) {
   );
 }
 
-export function MaterialCard({ m, handle, view, lang, preview, large, index = 0 }: { m: Material; handle: string; view: PageLayout['materialsView']; lang: Lang; preview?: boolean; large?: boolean; index?: number }) {
-  const to = `/t/${handle}/m/${m.id}`;
+export function MaterialCard({ m, view, lang, preview, large, index = 0 }: { m: Material; handle?: string; view: PageLayout['materialsView']; lang: Lang; preview?: boolean; large?: boolean; index?: number }) {
+  const to = topicPath(m);
+  const reload = m.kind === 'html';
   const delay = { animationDelay: `${Math.min(index, 12) * 70}ms` };
   if (view === 'compact') {
     return (
-      <PLink to={to} preview={preview} className="tp-card tp-enter flex items-center gap-3 px-4 py-2.5" style={delay}>
+      <PLink to={to} reload={reload} preview={preview} className="tp-card tp-enter flex items-center gap-3 px-4 py-2.5" style={delay}>
         <span className="text-xl">{iconFor(m)}</span>
         <span className="tp-h flex-1 truncate font-semibold">{m.title}</span>
         {isNew(m.created_at) && <span className="tp-new">{lang === 'bn' ? 'নতুন' : 'New'}</span>}
@@ -61,7 +65,7 @@ export function MaterialCard({ m, handle, view, lang, preview, large, index = 0 
   }
   if (view === 'list' && !large) {
     return (
-      <PLink to={to} preview={preview} className="tp-card tp-enter flex items-center gap-4 p-3" style={delay}>
+      <PLink to={to} reload={reload} preview={preview} className="tp-card tp-enter flex items-center gap-4 p-3" style={delay}>
         <div className="tp-cover h-16 w-16 shrink-0 rounded-[calc(var(--tp-radius)*0.6)] [&>b]:!text-3xl" style={{ borderRadius: 'calc(var(--tp-radius) * 0.6)' }}>
           {m.cover_asset ? <img src={assetSrc(m.cover_asset)} alt="" className="absolute inset-0 z-10 h-full w-full object-cover" /> : <b>{iconFor(m)}</b>}
         </div>
@@ -77,13 +81,18 @@ export function MaterialCard({ m, handle, view, lang, preview, large, index = 0 
     );
   }
   return (
-    <PLink to={to} preview={preview} className="tp-card tp-enter flex flex-col overflow-hidden" style={delay}>
+    <PLink to={to} reload={reload} preview={preview} className="tp-card tp-enter flex flex-col overflow-hidden" style={delay}>
       <div className={`tp-cover ${large ? 'h-44' : 'h-[130px]'}`}>
         {m.cover_asset ? <img src={assetSrc(m.cover_asset)} alt="" loading="lazy" className="absolute inset-0 z-10 h-full w-full object-cover" /> : <b>{iconFor(m)}</b>}
         {isNew(m.created_at) && <span className="tp-new absolute right-3 top-3 z-20">{lang === 'bn' ? 'নতুন' : 'New'}</span>}
       </div>
       <div className="flex flex-1 flex-col gap-2 px-5 pb-4 pt-4">
-        {m.subject && <div className="text-[13px] font-bold tracking-wide" style={{ color: 'var(--tp-primary)' }}>{m.subject}</div>}
+        {(m.subject || m.owner_name) && (
+          <div className="flex items-center justify-between gap-2 text-[13px] font-bold tracking-wide">
+            <span style={{ color: 'var(--tp-primary)' }}>{m.subject}</span>
+            {m.owner_name && <span className="tp-muted truncate font-semibold">{m.owner_name}</span>}
+          </div>
+        )}
         <h3 className={`tp-h font-bold leading-snug ${large ? 'text-2xl' : 'text-[22px]'}`}>{m.title}</h3>
         {m.description && <p className="tp-muted line-clamp-3 text-[15px] leading-relaxed">{m.description}</p>}
         <Tags m={m} lang={lang} />
@@ -104,14 +113,14 @@ export function MaterialGrid({ items, ctx, large }: { items: Material[]; ctx: Bl
   return (
     <div className={cls}>
       {items.map((m, i) => (
-        <MaterialCard key={m.id} m={m} handle={ctx.data.teacher.handle} view={view} lang={ctx.lang} preview={ctx.preview} large={large} index={i} />
+        <MaterialCard key={m.id} m={m} view={view} lang={ctx.lang} preview={ctx.preview} large={large} index={i} />
       ))}
     </div>
   );
 }
 
 function CollectionCard({ c, ctx, style, index }: { c: Collection; ctx: BlockCtx; style: 'cards' | 'list'; index: number }) {
-  const to = `/t/${ctx.data.teacher.handle}/c/${c.id}`;
+  const to = `/c/${c.id}`;
   const count = `${num(c.item_count ?? 0, ctx.lang)} ${t(ctx.lang, 'items')}`;
   const delay = { animationDelay: `${index * 70}ms` };
   if (style === 'list') {
@@ -148,7 +157,7 @@ function CollectionCard({ c, ctx, style, index }: { c: Collection; ctx: BlockCtx
 // ---------- Blocks ----------
 
 function HeroBlock({ b, ctx }: { b: Extract<Block, { type: 'hero' }>; ctx: BlockCtx }) {
-  const avatar = b.avatarAsset ? assetSrc(b.avatarAsset) : ctx.data.teacher.avatar_url;
+  const avatar = b.avatarAsset ? assetSrc(b.avatarAsset) : null;
   const center = b.align === 'center';
   const highlight = b.highlight === undefined ? lastWord(b.title) : b.highlight;
   const cta = b.ctaLabel && b.ctaHref && (
@@ -215,7 +224,25 @@ function HeroBlock({ b, ctx }: { b: Extract<Block, { type: 'hero' }>; ctx: Block
   );
 }
 
+function TeacherBanner({ ctx }: { ctx: BlockCtx }) {
+  const [teacher, setTeacher] = useContext(TeacherFilter);
+  const t = ctx.data.teachers.find((x) => x.handle === teacher);
+  if (!teacher) return null;
+  return (
+    <div className="mb-4 flex flex-wrap items-center gap-2">
+      <span className="tp-muted text-[15px]">{ctx.lang === 'bn' ? 'শিক্ষক:' : 'Teacher:'}</span>
+      <button className="tp-chip" data-active="true" onClick={() => setTeacher('')}>
+        {t?.name ?? teacher} <X className="h-3.5 w-3.5" />
+      </button>
+      <button className="tp-muted text-sm font-semibold underline underline-offset-4" onClick={() => setTeacher('')}>
+        {ctx.lang === 'bn' ? 'সবার উপকরণ দেখো' : 'Show everyone'}
+      </button>
+    </div>
+  );
+}
+
 function MaterialsBlock({ b, ctx }: { b: Extract<Block, { type: 'materials' }>; ctx: BlockCtx }) {
+  const [teacher] = useContext(TeacherFilter);
   const [q, setQ] = useState('');
   const [subject, setSubject] = useState('');
   const [cls, setCls] = useState('');
@@ -223,9 +250,14 @@ function MaterialsBlock({ b, ctx }: { b: Extract<Block, { type: 'materials' }>; 
   const base = useMemo(
     () =>
       ctx.data.materials.filter(
-        (m) => (!b.subject || m.subject === b.subject) && (!b.classLevel || m.class_level === b.classLevel) && (!b.kind || m.kind === b.kind) && (!b.tag || m.tags.includes(b.tag)),
+        (m) =>
+          (!teacher || m.owner_handle === teacher) &&
+          (!b.subject || m.subject === b.subject) &&
+          (!b.classLevel || m.class_level === b.classLevel) &&
+          (!b.kind || m.kind === b.kind) &&
+          (!b.tag || m.tags.includes(b.tag)),
       ),
-    [ctx.data.materials, b.subject, b.classLevel, b.kind, b.tag],
+    [ctx.data.materials, b.subject, b.classLevel, b.kind, b.tag, teacher],
   );
   const subjects = useMemo(() => [...new Set(base.map((m) => m.subject).filter(Boolean))].sort(), [base]);
   const classes = useMemo(() => [...new Set(base.map((m) => m.class_level).filter(Boolean))].sort(), [base]);
@@ -259,8 +291,9 @@ function MaterialsBlock({ b, ctx }: { b: Extract<Block, { type: 'materials' }>; 
     );
 
   return (
-    <section>
+    <section id="materials" className="scroll-mt-6">
       <Heading>{b.heading}</Heading>
+      <TeacherBanner ctx={ctx} />
       {(b.showSearch || b.showFilters) && (
         <div className="flex flex-wrap items-center gap-3">
           {b.showSearch && (
@@ -374,6 +407,67 @@ function GalleryBlock({ b }: { b: Extract<Block, { type: 'gallery' }> }) {
   );
 }
 
+function CollectionsBlock({ b, ctx }: { b: Extract<Block, { type: 'collections' }>; ctx: BlockCtx }) {
+  const [teacher] = useContext(TeacherFilter);
+  const base = b.ids.length ? b.ids.map((id) => ctx.data.collections.find((c) => c.id === id)).filter((c): c is PublicPageData['collections'][number] => !!c) : ctx.data.collections;
+  const list = teacher ? base.filter((c) => c.owner_handle === teacher) : base;
+  if (!list.length) return ctx.preview && !teacher ? <div className="tp-card tp-muted p-6 text-center text-sm">Publish a collection to show it here.</div> : null;
+  return (
+    <section>
+      <Heading>{b.heading}</Heading>
+      <div className={b.style === 'cards' ? 'grid gap-[26px] grid-cols-[repeat(auto-fill,minmax(270px,1fr))]' : 'grid gap-3'}>
+        {list.map((c, i) => (
+          <CollectionCard key={c.id} c={c} ctx={ctx} style={b.style} index={i} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/** শিক্ষকবৃন্দ — clicking a teacher shows only their materials (and collections) on this same page. */
+function TeachersBlock({ b, ctx }: { b: Extract<Block, { type: 'teachers' }>; ctx: BlockCtx }) {
+  const [teacher, setTeacher] = useContext(TeacherFilter);
+  const ref = useRef<HTMLElement>(null);
+  if (!ctx.data.teachers.length) return ctx.preview ? <div className="tp-card tp-muted p-6 text-center text-sm">Teachers with published materials appear here.</div> : null;
+  const pick = (handle: string) => {
+    setTeacher(teacher === handle ? '' : handle);
+    setTimeout(() => ref.current?.ownerDocument.getElementById('materials')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
+  };
+  return (
+    <section ref={ref}>
+      <Heading>{b.heading}</Heading>
+      <div className="grid gap-4 grid-cols-[repeat(auto-fill,minmax(230px,1fr))]">
+        {ctx.data.teachers.map((tch, i) => {
+          const active = teacher === tch.handle;
+          return (
+            <button
+              key={tch.id}
+              onClick={() => pick(tch.handle)}
+              className="tp-card tp-enter flex items-center gap-3.5 p-3.5 text-left"
+              style={{ animationDelay: `${i * 60}ms`, ...(active ? { background: 'var(--tp-accent-soft)' } : {}) }}
+              aria-pressed={active}
+            >
+              {tch.avatar_url ? (
+                <img src={tch.avatar_url} alt="" className="h-12 w-12 shrink-0 rounded-full object-cover" style={{ border: '1.5px solid var(--tp-ink)' }} />
+              ) : (
+                <span className="tp-h flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-lg font-bold" style={{ background: 'var(--tp-primary)', color: 'var(--tp-accent)' }}>
+                  {(tch.name || '?').slice(0, 1).toUpperCase()}
+                </span>
+              )}
+              <span className="min-w-0">
+                <span className="tp-h block truncate text-lg font-bold">{tch.name}</span>
+                <span className="tp-muted block text-sm">
+                  {num(tch.material_count, ctx.lang)} {t(ctx.lang, 'materials_count')}
+                </span>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 export function BlockView({ block: b, ctx }: { block: Block; ctx: BlockCtx }) {
   switch (b.type) {
     case 'hero':
@@ -402,7 +496,10 @@ export function BlockView({ block: b, ctx }: { block: Block; ctx: BlockCtx }) {
                   <h3 className="flex items-center gap-1.5 font-bold">
                     {a.pinned && <Pin className="h-4 w-4" />} {a.title}
                   </h3>
-                  <span className="tp-muted shrink-0 text-xs">{niceDate(a.created_at, ctx.lang)}</span>
+                  <span className="tp-muted shrink-0 text-xs">
+                    {a.owner_name ? `${a.owner_name} · ` : ''}
+                    {niceDate(a.created_at, ctx.lang)}
+                  </span>
                 </div>
                 {a.body_md && <div className="tp-prose text-[15px]" dangerouslySetInnerHTML={{ __html: renderMarkdown(a.body_md) }} />}
               </article>
@@ -411,20 +508,10 @@ export function BlockView({ block: b, ctx }: { block: Block; ctx: BlockCtx }) {
         </section>
       );
     }
-    case 'collections': {
-      const list = b.ids.length ? b.ids.map((id) => ctx.data.collections.find((c) => c.id === id)).filter((c): c is Collection => !!c) : ctx.data.collections;
-      if (!list.length) return ctx.preview ? <div className="tp-card tp-muted p-6 text-center text-sm">Publish a collection to show it here.</div> : null;
-      return (
-        <section>
-          <Heading>{b.heading}</Heading>
-          <div className={b.style === 'cards' ? 'grid gap-[26px] grid-cols-[repeat(auto-fill,minmax(270px,1fr))]' : 'grid gap-3'}>
-            {list.map((c, i) => (
-              <CollectionCard key={c.id} c={c} ctx={ctx} style={b.style} index={i} />
-            ))}
-          </div>
-        </section>
-      );
-    }
+    case 'collections':
+      return <CollectionsBlock b={b} ctx={ctx} />;
+    case 'teachers':
+      return <TeachersBlock b={b} ctx={ctx} />;
     case 'materials':
       return <MaterialsBlock b={b} ctx={ctx} />;
     case 'featured': {

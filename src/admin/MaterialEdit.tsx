@@ -37,7 +37,7 @@ export default function MaterialEdit() {
   const confirm = useConfirm();
   const { data, isLoading, error, refetch } = useQuery({ queryKey: ['material', id], queryFn: () => adminApi<Detail>(`/materials/${id}`) });
 
-  const [form, setForm] = useState({ title: '', description: '', subject: '', class_level: '', tags: '', status: 'draft' as Status, allow_download: true, cover_asset: null as string | null, embed_url: '', body_md: '', entry_path: '', icon: '' });
+  const [form, setForm] = useState({ title: '', description: '', subject: '', class_level: '', tags: '', status: 'draft' as Status, allow_download: true, cover_asset: null as string | null, embed_url: '', body_md: '', entry_path: '', icon: '', slug: '' });
   const audioInput = useRef<HTMLInputElement>(null);
   const [audioUp, setAudioUp] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
@@ -61,6 +61,7 @@ export default function MaterialEdit() {
     body_md: m.body_md ?? '',
     entry_path: m.entry_path ?? '',
     icon: m.icon ?? '',
+    slug: m.slug ?? '',
   });
 
   useEffect(() => {
@@ -102,6 +103,7 @@ export default function MaterialEdit() {
         allow_download: form.allow_download,
         cover_asset: form.cover_asset,
         icon: form.icon,
+        slug: form.slug.trim().toLowerCase(),
       };
       if (m.kind === 'embed') body.embed_url = form.embed_url;
       if (m.kind === 'note') body.body_md = form.body_md;
@@ -178,8 +180,7 @@ export default function MaterialEdit() {
     navigate(`/admin/materials/${material.id}`);
   };
 
-  const handle = m.owner_handle ?? me.user.handle;
-  const publicUrl = `${window.location.origin}/t/${handle}/m/${m.id}`;
+  const publicUrl = `${window.location.origin}/topic/${m.slug}`;
   const isFileKind = !['embed', 'note'].includes(m.kind) || !!m.file_name;
   const htmlEntries = data.files.filter((f) => /\.html?$/i.test(f.path));
 
@@ -205,6 +206,16 @@ export default function MaterialEdit() {
         <div className="space-y-5">
           <Card className="space-y-4 p-5">
             <Field label="Title"><Input value={form.title} onChange={(e) => set('title', e.target.value)} /></Field>
+            <Field label="Page link" hint="Lowercase English letters, numbers and dashes — e.g. bagdhara-exercise">
+              <div className="flex items-center overflow-hidden rounded-xl border-[1.5px] border-stone-300 bg-white focus-within:border-indigo-600">
+                <span className="whitespace-nowrap border-r border-stone-200 bg-stone-50 px-2.5 py-2 text-xs text-stone-500">{window.location.host}/topic/</span>
+                <input
+                  value={form.slug}
+                  onChange={(e) => set('slug', e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-{2,}/g, '-'))}
+                  className="min-w-0 flex-1 bg-transparent px-2.5 py-2 text-[15px] outline-none"
+                />
+              </div>
+            </Field>
             <Field label="Description"><Textarea value={form.description} onChange={(e) => set('description', e.target.value)} rows={3} placeholder="What students should do with this material" /></Field>
             <MetaFields subject={form.subject} setSubject={(v) => set('subject', v)} classLevel={form.class_level} setClassLevel={(v) => set('class_level', v)} tags={form.tags} setTags={(v) => set('tags', v)} />
             {m.kind === 'embed' && <Field label="Embed link"><Input value={form.embed_url} onChange={(e) => set('embed_url', e.target.value)} /></Field>}
@@ -231,7 +242,7 @@ export default function MaterialEdit() {
             </div>
           </Card>
 
-          <Card className="space-y-3 p-5">
+          {m.kind !== 'html' && <Card className="space-y-3 p-5">
             <h2 className="serif flex items-center gap-2 text-lg font-bold text-indigo-600"><Headphones className="h-5 w-5" /> Lecture audio</h2>
             <p className="text-xs text-stone-500">Add a recorded explanation. Students see a player above the material (great for worksheets and practice pages).</p>
             {audioUp !== null ? (
@@ -245,7 +256,7 @@ export default function MaterialEdit() {
             ) : (
               <Button size="sm" variant="soft" icon={<Headphones className="h-3.5 w-3.5" />} onClick={() => audioInput.current?.click()}>Add lecture audio</Button>
             )}
-          </Card>
+          </Card>}
 
           <Card className="space-y-4 p-5">
             <h2 className="serif text-lg font-bold text-indigo-600">Visibility</h2>
@@ -308,7 +319,7 @@ export default function MaterialEdit() {
               </div>
             )}
             <div className="flex flex-wrap gap-2 pt-1">
-              {m.status === 'published' && (
+              {m.status !== 'draft' && (
                 <>
                   <a href={publicUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg border border-stone-300 px-3 py-1.5 text-xs font-medium hover:bg-stone-50"><ExternalLink className="h-3.5 w-3.5" /> Open public page</a>
                   <Button size="sm" icon={<Copy className="h-3.5 w-3.5" />} onClick={async () => { await copyText(publicUrl); toast.success('Copied'); }}>Copy public link</Button>
@@ -325,7 +336,15 @@ export default function MaterialEdit() {
             <div className="mb-2 text-xs font-medium uppercase tracking-wide text-stone-500">Student preview</div>
             <div className="tp-scope max-h-[85vh] space-y-5 overflow-y-auto rounded-2xl border-[1.5px] border-stone-900 p-5" style={themeStyle(previewTheme)} data-card={previewTheme.cardStyle} data-btn={previewTheme.buttonStyle}>
               {data.access.audioUrl && <AudioPlayer url={data.access.audioUrl} id={`${m.id}-admin`} title="লেকচার অডিও" lang="bn" sticky={false} />}
-              {m.kind === 'note' ? (
+              {m.kind === 'html' ? (
+                <div className="tp-card space-y-3 p-6 text-center">
+                  <div className="text-5xl">{form.icon || KIND_ICONS.html}</div>
+                  <p className="text-[15px]">HTML lessons open as their own standalone page, exactly as uploaded{m.status === 'draft' ? ' (publish it or set it to “link only” to give it a public link)' : ''}.</p>
+                  {data.access.bundleUrl && (
+                    <a href={data.access.bundleUrl} target="_blank" rel="noreferrer" className="tp-btn">Open the page ↗</a>
+                  )}
+                </div>
+              ) : m.kind === 'note' ? (
                 <div className="tp-card tp-prose p-5" dangerouslySetInnerHTML={{ __html: renderMarkdown(form.body_md) }} />
               ) : (
                 <Viewer key={m.updated_at} material={m} access={data.access} lang="bn" />

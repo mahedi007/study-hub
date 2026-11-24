@@ -89,7 +89,7 @@ export default function Materials({ scope }: { scope?: 'all' }) {
     refresh();
   };
 
-  const publicUrl = (m: Material) => `${window.location.origin}/t/${m.owner_handle ?? me.user.handle}/m/${m.id}`;
+  const publicUrl = (m: Material) => `${window.location.origin}/topic/${m.slug}`;
 
   const allSelected = list.length > 0 && list.every((m) => selected.includes(m.id));
   const toggleAll = () => setSelected(allSelected ? [] : list.map((m) => m.id));

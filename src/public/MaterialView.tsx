@@ -51,7 +51,7 @@ export function MaterialView({
     <article>
       {backTo && (
         <PLink to={backTo} className="mb-4 inline-flex items-center gap-1.5 text-[15px] font-semibold hover:opacity-70" style={{ color: 'var(--tp-primary)' }}>
-          <ArrowLeft className="h-4 w-4" /> {backLabel ?? (lang === 'bn' ? 'ফিরে যাও' : 'Back')}
+          <ArrowLeft className="h-4 w-4" /> {backLabel ?? (lang === 'bn' ? 'সব ম্যাটেরিয়াল' : 'All materials')}
         </PLink>
       )}
       <header className={compact ? 'mb-6' : 'mb-8 pt-2'}>

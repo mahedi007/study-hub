@@ -225,7 +225,7 @@ export default function Teachers() {
                       <Menu trigger={<button className="rounded-full p-1.5 text-stone-500 hover:bg-stone-100" aria-label="Actions"><MoreHorizontal className="h-4 w-4" /></button>}>
                         <MenuItem onClick={() => setEdit(u)}>Edit name, handle & storage limit</MenuItem>
                         <MenuItem icon={<KeyRound className="h-4 w-4" />} onClick={() => makeLink(u)}>{u.has_password ? 'Create password reset link' : 'Copy invite link again'}</MenuItem>
-                        {u.handle && <MenuItem icon={<ExternalLink className="h-4 w-4" />} onClick={() => window.open(`/t/${u.handle}`, '_blank')}>View public page</MenuItem>}
+                        {u.handle && <MenuItem icon={<ExternalLink className="h-4 w-4" />} onClick={() => window.open(`/?teacher=${u.handle}`, '_blank')}>View their materials</MenuItem>}
                         {u.id !== me.user.id && !isSuper && (
                           <>
                             <MenuItem onClick={() => patch(u, { role: u.role === 'admin' ? 'teacher' : 'admin' })}>{u.role === 'admin' ? 'Make teacher' : 'Make admin'}</MenuItem>
@@ -251,7 +251,7 @@ export default function Teachers() {
           </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Name"><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Munjiba" /></Field>
-            <Field label="Page handle" hint="Their page: /t/handle"><Input value={form.handle} onChange={(e) => setForm({ ...form, handle: e.target.value })} placeholder="munjiba" /></Field>
+            <Field label="Short name" hint="Filter link: /?teacher=name"><Input value={form.handle} onChange={(e) => setForm({ ...form, handle: e.target.value })} placeholder="munjiba" /></Field>
             <Field label="Role">
               <Select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
                 <option value="teacher">Teacher</option>

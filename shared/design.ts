@@ -177,6 +177,7 @@ export const BLOCK_LABELS: Record<BlockType, { label: string; description: strin
   faq: { label: 'FAQ', description: 'Questions and answers' },
   gallery: { label: 'Photo gallery', description: 'Grid of images' },
   stats: { label: 'Stats', description: 'Number of materials, collections, views' },
+  teachers: { label: 'Teachers (শিক্ষকবৃন্দ)', description: 'Teacher cards — click one to show only their materials' },
   divider: { label: 'Divider / spacer', description: 'Separate sections' },
 };
 
@@ -222,6 +223,8 @@ export function newBlock(type: BlockType): Block {
       return { ...base, type, heading: 'Gallery', assets: [] };
     case 'stats':
       return { ...base, type, heading: '' };
+    case 'teachers':
+      return { ...base, type, heading: 'শিক্ষকবৃন্দ' };
     case 'divider':
       return { ...base, type, style: 'line' };
   }
@@ -229,12 +232,12 @@ export function newBlock(type: BlockType): Block {
 
 export function defaultDesign(name = 'স্টাডি ম্যাটেরিয়ালস'): PageDesign {
   return {
-    version: 1,
+    version: 2,
     theme: presetTheme('munjiba'),
     layout: { width: 'normal', materialsView: 'grid', headerStyle: 'brand' },
     seo: { title: `${name} — স্টাডি ম্যাটেরিয়ালস`, description: 'অডিও, অনুশীলন ও পড়ার উপকরণ — সব এক জায়গায়।' },
     language: 'bn',
-    blocks: [newBlock('hero'), newBlock('announcements'), newBlock('collections'), newBlock('materials')],
+    blocks: [newBlock('hero'), newBlock('announcements'), newBlock('teachers'), newBlock('collections'), newBlock('materials')],
   };
 }
 
@@ -243,13 +246,19 @@ export function normalizeDesign(raw: unknown, name?: string): PageDesign {
   const d = defaultDesign(name);
   if (!raw || typeof raw !== 'object') return d;
   const r = raw as Partial<PageDesign>;
-  const blocks = Array.isArray(r.blocks)
+  let blocks = Array.isArray(r.blocks)
     ? r.blocks
         .filter((b): b is Block => !!b && typeof b === 'object' && typeof (b as Block).type === 'string' && (b as Block).type in BLOCK_LABELS)
         .map((b) => ({ ...newBlock(b.type), ...b }) as Block)
     : d.blocks;
+  // Designs saved before the single home page get a teachers section above the materials list once.
+  if ((r.version ?? 1) < 2 && !blocks.some((b) => b.type === 'teachers')) {
+    const at = blocks.findIndex((b) => b.type === 'materials' || b.type === 'collections');
+    blocks = [...blocks];
+    blocks.splice(at < 0 ? blocks.length : at, 0, newBlock('teachers'));
+  }
   return {
-    version: 1,
+    version: 2,
     theme: { ...d.theme, ...(r.theme ?? {}) },
     layout: { ...d.layout, ...(r.layout ?? {}) },
     seo: { ...d.seo, ...(r.seo ?? {}) },
@@ -326,6 +335,7 @@ export const DEFAULT_SETTINGS = {
   maxFileMb: 0, // 0 = no limit
   defaultQuotaMb: 0, // 0 = unlimited
   footerText: '',
+  brandName: 'Munjiba',
   registration: 'approval' as 'closed' | 'approval' | 'open',
 };
 
@@ -352,3 +362,21 @@ export const isNew = (createdAt: number) => Date.now() - createdAt < 7 * 8640000
 
 const BN_DIGITS = '০১২৩৪৫৬৭৮৯';
 export const bnNum = (v: number | string) => String(v).replace(/[0-9]/g, (d) => BN_DIGITS[Number(d)]);
+
+/** URL-safe topic slug from a title (ASCII only; Bangla-only titles fall back to "material"). */
+export function slugify(input: string): string {
+  return (
+    input
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/&/g, ' and ')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 70)
+      .replace(/-+$/g, '') || 'material'
+  );
+}
+
+export const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]{0,78}[a-z0-9])?$/;
+export const topicPath = (m: { slug: string }) => `/topic/${m.slug}`;

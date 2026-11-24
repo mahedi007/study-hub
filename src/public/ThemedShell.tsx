@@ -1,6 +1,6 @@
 import { useEffect, type ReactNode, type MouseEvent } from 'react';
 import { Link } from 'react-router-dom';
-import type { PageLayout, PublicTeacher, Theme } from '../../shared/types';
+import type { PageLayout, SiteInfo, Theme } from '../../shared/types';
 import { ensureFonts } from '../lib/fonts';
 import { themeStyle } from '../lib/theme';
 import type { Lang } from '../lib/i18n';
@@ -12,10 +12,18 @@ export const WIDTHS: Record<PageLayout['width'], string> = {
 };
 
 /** A link that does nothing inside the page designer preview. */
-export function PLink({ to, preview, className, children, style }: { to: string; preview?: boolean; className?: string; children: ReactNode; style?: React.CSSProperties }) {
+export function PLink({ to, preview, className, children, style, reload }: { to: string; preview?: boolean; className?: string; children: ReactNode; style?: React.CSSProperties; reload?: boolean }) {
   if (preview) {
     return (
       <a href={to} className={className} style={style} onClick={(e: MouseEvent) => e.preventDefault()}>
+        {children}
+      </a>
+    );
+  }
+  // reload: a real page load (HTML lessons are standalone pages served by the server, not the app).
+  if (reload) {
+    return (
+      <a href={to} className={className} style={style}>
         {children}
       </a>
     );
@@ -52,9 +60,11 @@ export function Brand({ name, avatar }: { name: string; avatar?: string | null }
   );
 }
 
+export const DEFAULT_SITE: SiteInfo = { siteName: 'স্টাডি ম্যাটেরিয়ালস', brandName: 'Munjiba', logoUrl: null };
+
 export function ThemedShell({
   theme,
-  teacher,
+  site = DEFAULT_SITE,
   lang,
   setLang,
   layout,
@@ -65,7 +75,7 @@ export function ThemedShell({
   footer = true,
 }: {
   theme: Theme;
-  teacher?: PublicTeacher | null;
+  site?: SiteInfo;
   lang: Lang;
   setLang: (l: Lang) => void;
   layout?: Partial<PageLayout>;
@@ -82,17 +92,18 @@ export function ThemedShell({
   }, [theme.bg, preview]);
   const width = WIDTHS[layout?.width ?? 'normal'];
   const headerStyle = layout?.headerStyle ?? 'brand';
-  const label = siteLabel ?? (lang === 'bn' ? 'স্টাডি ম্যাটেরিয়ালস' : 'Study materials');
-  const brand = teacher ? (
-    <PLink to={`/t/${teacher.handle}`} preview={preview} className="min-w-0">
-      <Brand name={teacher.name} avatar={headerStyle === 'brand' ? null : teacher.avatar_url} />
+  const label = siteLabel ?? site.siteName ?? (lang === 'bn' ? 'স্টাডি ম্যাটেরিয়ালস' : 'Study materials');
+  // The brand always leads back to the single home page.
+  const brand = (
+    <PLink to="/" preview={preview} className="min-w-0" reload={false}>
+      <Brand name={site.brandName || 'Munjiba'} avatar={site.logoUrl} />
     </PLink>
-  ) : (
-    <span />
   );
   const right = (
     <div className="flex items-center gap-4 text-[15px]">
-      <span className="tp-muted hidden sm:inline">{label}</span>
+      <PLink to="/" preview={preview} className="tp-muted hidden hover:underline sm:inline">
+        {label}
+      </PLink>
       <LangToggle lang={lang} setLang={setLang} />
     </div>
   );

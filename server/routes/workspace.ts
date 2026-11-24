@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { AppEnv } from '../env';
 import { fail } from '../env';
-import { assertOwner, hashPassword, issueSession, superAdminEmail, validatePassword, verifyPassword } from '../auth';
+import { assertOwner, requireAdmin, hashPassword, issueSession, superAdminEmail, validatePassword, verifyPassword } from '../auth';
 import {
   assetUrl,
   audit,
@@ -20,8 +20,8 @@ import {
 import { canPresign, usedBytes } from '../storage';
 import { PROXY_UPLOAD_LIMIT } from './materials';
 import { assetKey } from '../tokens';
-import { defaultDesign, normalizeDesign } from '../../shared/design';
-import { buildPageData } from './public';
+import { normalizeDesign } from '../../shared/design';
+import { buildSiteData, siteDesign } from './public';
 
 const r = new Hono<AppEnv>();
 
@@ -339,71 +339,48 @@ r.delete('/links/:id', async (c) => {
 
 // ---------- Page design ----------
 
-r.get('/design', async (c) => {
-  const user = c.get('user');
-  const row = await c.env.DB.prepare(`SELECT * FROM page_designs WHERE owner_id = ?`).bind(user.id).first<any>();
-  const parse = (s: string | null) => {
-    if (!s) return null;
-    try {
-      return normalizeDesign(JSON.parse(s), user.name);
-    } catch {
-      return null;
-    }
-  };
+// The home page design is site-wide: only admins can edit it. Stored in settings (design_draft / design_published).
+async function putSetting(c: any, key: string, value: string) {
+  await c.env.DB.prepare(`INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`).bind(key, value).run();
+}
+
+r.get('/design', requireAdmin, async (c) => {
+  const published = await c.env.DB.prepare(`SELECT value FROM settings WHERE key = 'design_published'`).first<{ value: string }>();
+  const at = await c.env.DB.prepare(`SELECT value FROM settings WHERE key = 'design_published_at'`).first<{ value: string }>();
   return c.json({
-    draft: parse(row?.draft_json) ?? defaultDesign(user.name || 'My classroom'),
-    published: parse(row?.published_json),
-    updated_at: row?.updated_at ?? null,
-    published_at: row?.published_at ?? null,
-    handle: user.handle,
+    draft: await siteDesign(c.env, 'draft'),
+    published: published ? await siteDesign(c.env, 'published') : null,
+    published_at: at ? Number(at.value) : null,
+    handle: null,
   });
 });
 
-r.put('/design', async (c) => {
-  const user = c.get('user');
+r.put('/design', requireAdmin, async (c) => {
   const { design } = await c.req.json();
-  const json = JSON.stringify(normalizeDesign(design, user.name));
+  const json = JSON.stringify(normalizeDesign(design));
   if (json.length > 300_000) fail(413, 'Design is too large');
-  await c.env.DB.prepare(
-    `INSERT INTO page_designs (owner_id, draft_json, updated_at) VALUES (?, ?, ?)
-     ON CONFLICT(owner_id) DO UPDATE SET draft_json = excluded.draft_json, updated_at = excluded.updated_at`,
-  )
-    .bind(user.id, json, now())
-    .run();
+  await putSetting(c, 'design_draft', json);
   return c.json({ ok: true, updated_at: now() });
 });
 
-r.post('/design/publish', async (c) => {
-  const user = c.get('user');
+r.post('/design/publish', requireAdmin, async (c) => {
   const body = await c.req.json().catch(() => ({}));
+  const json = JSON.stringify(normalizeDesign(body?.design ?? (await siteDesign(c.env, 'draft'))));
   const t = now();
-  if (body?.design) {
-    const json = JSON.stringify(normalizeDesign(body.design, user.name));
-    await c.env.DB.prepare(
-      `INSERT INTO page_designs (owner_id, draft_json, published_json, updated_at, published_at) VALUES (?, ?, ?, ?, ?)
-       ON CONFLICT(owner_id) DO UPDATE SET draft_json = excluded.draft_json, published_json = excluded.published_json, updated_at = excluded.updated_at, published_at = excluded.published_at`,
-    )
-      .bind(user.id, json, json, t, t)
-      .run();
-  } else {
-    await c.env.DB.prepare(`UPDATE page_designs SET published_json = draft_json, published_at = ? WHERE owner_id = ?`).bind(t, user.id).run();
-  }
-  await audit(c.env, user, 'design.publish', user.id);
+  await putSetting(c, 'design_draft', json);
+  await putSetting(c, 'design_published', json);
+  await putSetting(c, 'design_published_at', String(t));
+  await audit(c.env, c.get('user'), 'design.publish', 'site');
   return c.json({ ok: true, published_at: t });
 });
 
-r.post('/design/revert', async (c) => {
-  const user = c.get('user');
-  await c.env.DB.prepare(`UPDATE page_designs SET draft_json = COALESCE(published_json, draft_json), updated_at = ? WHERE owner_id = ?`)
-    .bind(now(), user.id)
-    .run();
+r.post('/design/revert', requireAdmin, async (c) => {
+  const published = await siteDesign(c.env, 'published');
+  await putSetting(c, 'design_draft', JSON.stringify(published));
   return c.json({ ok: true });
 });
 
-r.get('/page-data', async (c) => {
-  const user = c.get('user');
-  return c.json(await buildPageData(c.env, user));
-});
+r.get('/page-data', async (c) => c.json(await buildSiteData(c.env)));
 
 // ---------- Assets (images for pages and covers) ----------
 
