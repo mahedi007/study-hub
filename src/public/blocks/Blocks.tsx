@@ -193,78 +193,182 @@ function TeacherFaces({ teachers }: { teachers: PublicPageData['teachers'] }) {
   );
 }
 
+/** Two floating cards frame the illustration: top-left and bottom-right. */
 const SHOWCASE_SLOTS = [
-  { top: '6%', left: '2%', r: '-5deg', delay: '0s' },
-  { top: '36%', left: '20%', r: '3deg', delay: '-2s' },
-  { top: '66%', left: '4%', r: '-2deg', delay: '-4s' },
+  { top: '3%', left: '-10%', r: '-5deg', delay: '0s' },
+  { bottom: '13%', right: '-12%', r: '4deg', delay: '-3s' },
 ];
 const PLACEHOLDER_ITEMS = [
-  { icon: '📖', bn: 'অনুশীলন', en: 'Exercises' },
-  { icon: '🎧', bn: 'অডিও লেকচার', en: 'Audio lectures' },
-  { icon: '📝', bn: 'নোট ও শিট', en: 'Notes & sheets' },
+  { icon: '📖', bn: 'অনুশীলন', en: 'Exercises', subBn: 'নিজে করে শেখো', subEn: 'Learn by doing' },
+  { icon: '🎧', bn: 'অডিও লেকচার', en: 'Audio lectures', subBn: 'শুনে শেখো', subEn: 'Listen and learn' },
+  { icon: '📝', bn: 'নোট ও শিট', en: 'Notes & sheets', subBn: 'পড়ে শেখো', subEn: 'Read and revise' },
 ];
 
-/** Live collage beside the editorial headline: the newest materials as tilted cards over a soft blob. */
+/** Hand-drawn style study scene for the middle of the collage: open book on a stack, pencil, sound waves. */
+function StudyIllustration() {
+  const ink = 'var(--tp-ink)';
+  return (
+    <svg viewBox="0 0 260 240" className="tp-showcase-art" aria-hidden="true">
+      {/* soft shadow */}
+      <ellipse cx="130" cy="222" rx="92" ry="9" fill={ink} opacity="0.12" />
+      {/* book stack */}
+      <g stroke={ink} strokeWidth="2.5" strokeLinejoin="round">
+        <rect x="42" y="182" width="176" height="32" rx="6" fill="var(--tp-primary)" />
+        <path d="M58 182v32" />
+        <path d="M196 191h12M196 199h12" stroke="var(--tp-accent)" />
+        <rect x="56" y="152" width="154" height="30" rx="6" fill="var(--tp-accent)" />
+        <path d="M70 152v30" />
+        <rect x="48" y="124" width="164" height="28" rx="6" fill="var(--tp-surface)" />
+        <path d="M62 124v28M168 133h32M168 141h22" />
+      </g>
+      {/* open book */}
+      <g className="tp-art-book" stroke={ink} strokeWidth="2.5" strokeLinejoin="round">
+        <path d="M130 122c-20-12-48-16-78-10V60c30-6 58-2 78 10z" fill="var(--tp-surface)" />
+        <path d="M130 122c20-12 48-16 78-10V60c-30-6-58-2-78 10z" fill="var(--tp-surface)" />
+        <path d="M130 70v52" />
+        <g strokeWidth="2" stroke="var(--tp-muted)" opacity="0.7" strokeLinecap="round">
+          <path d="M66 76c18-3 36-1 52 6M66 88c18-3 36-1 52 6M66 100c14-2 28-1 40 3" />
+          <path d="M142 82c16-7 34-9 52-6M142 94c16-7 34-9 52-6M154 103c12-4 26-5 40-3" />
+        </g>
+      </g>
+      {/* letters floating out of the book */}
+      <g className="tp-art-letters" style={{ fontFamily: "var(--tp-heading), var(--tp-font), serif" }} fontWeight="800" textAnchor="middle">
+        <g className="tp-art-letter" style={{ animationDelay: '0s' }}>
+          <circle cx="96" cy="34" r="17" fill="var(--tp-primary)" stroke={ink} strokeWidth="2.5" />
+          <text x="96" y="41" fontSize="20" fill="var(--tp-accent)">অ</text>
+        </g>
+        <g className="tp-art-letter" style={{ animationDelay: '-1.3s' }}>
+          <circle cx="134" cy="18" r="14" fill="var(--tp-accent)" stroke={ink} strokeWidth="2.5" />
+          <text x="134" y="24" fontSize="16" fill={ink}>ক</text>
+        </g>
+        <g className="tp-art-letter" style={{ animationDelay: '-2.6s' }}>
+          <circle cx="170" cy="38" r="15" fill="var(--tp-surface)" stroke={ink} strokeWidth="2.5" />
+          <text x="170" y="44" fontSize="17" fill="var(--tp-primary)">আ</text>
+        </g>
+      </g>
+      {/* pencil */}
+      <g transform="rotate(28 226 120)" stroke={ink} strokeWidth="2.5" strokeLinejoin="round">
+        <rect x="219" y="58" width="15" height="84" rx="2" fill="var(--tp-accent)" />
+        <rect x="219" y="50" width="15" height="10" rx="2" fill="var(--tp-primary)" />
+        <path d="M219 142h15l-7.5 16z" fill="var(--tp-surface)" />
+        <path d="M224.5 153.5l2 4.5 2-4.5z" fill={ink} />
+      </g>
+      {/* sound waves (audio lessons) */}
+      <g className="tp-art-waves" fill="none" stroke="var(--tp-primary)" strokeWidth="3" strokeLinecap="round">
+        <path d="M30 84a14 14 0 0 1 0 22" />
+        <path d="M20 76a26 26 0 0 1 0 38" />
+        <path d="M10 68a38 38 0 0 1 0 54" />
+      </g>
+    </svg>
+  );
+}
+
+type ShowcaseItem =
+  | { kind: 'material'; m: Material }
+  | { kind: 'teacher'; t: PublicPageData['teachers'][number] }
+  | { kind: 'placeholder'; p: (typeof PLACEHOLDER_ITEMS)[number] };
+
+/**
+ * Live collage beside the editorial headline: an illustration inside a soft blob, with up to three
+ * floating cards around it — the newest materials first, then teachers, then the kinds of content.
+ */
 function HeroShowcase({ ctx }: { ctx: BlockCtx }) {
   const bn = ctx.lang === 'bn';
-  const latest = [...ctx.data.materials].sort((a, b) => b.created_at - a.created_at).slice(0, 3);
-  const teacherName = (m: Material) => ctx.data.teachers.find((t) => t.id === m.owner_id)?.name ?? (m as Material & { owner_name?: string }).owner_name ?? '';
+  const [, setTeacher] = useContext(TeacherFilter);
+  const latest = [...ctx.data.materials].sort((a, b) => b.created_at - a.created_at).slice(0, SHOWCASE_SLOTS.length);
+  const items: ShowcaseItem[] = latest.map((m) => ({ kind: 'material', m }));
+  for (const t of ctx.data.teachers) if (items.length < SHOWCASE_SLOTS.length) items.push({ kind: 'teacher', t });
+  for (const p of PLACEHOLDER_ITEMS) if (items.length < SHOWCASE_SLOTS.length) items.push({ kind: 'placeholder', p });
+  const teacherName = (m: Material) => ctx.data.teachers.find((t) => t.id === m.owner_id)?.name ?? '';
+  const scrollToMaterials = (el: HTMLElement) =>
+    (el.ownerDocument.getElementById('materials') as HTMLElement | null)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
   return (
-    <div className="tp-showcase hidden lg:block" aria-hidden={!latest.length}>
+    <div className="tp-showcase hidden lg:block">
       <div className="tp-showcase-ring" />
       <div className="tp-showcase-blob" />
-      <span className="tp-showcase-spark" style={{ top: '2%', right: '18%' }}>✦</span>
-      <span className="tp-showcase-spark" style={{ bottom: '6%', right: '6%', fontSize: 16, animationDelay: '-1.4s' }}>✦</span>
-      <span className="tp-showcase-spark" style={{ top: '46%', right: '0%', fontSize: 12, animationDelay: '-2.2s' }}>✦</span>
+      <span className="tp-showcase-spark" style={{ top: '6%', right: '30%' }}>✦</span>
+      <span className="tp-showcase-spark" style={{ bottom: '4%', left: '34%', fontSize: 16, animationDelay: '-1.4s' }}>✦</span>
+      <span className="tp-showcase-spark" style={{ top: '30%', left: '8%', fontSize: 12, animationDelay: '-2.2s' }}>✦</span>
+      <StudyIllustration />
 
-      {latest.length
-        ? latest.map((m, i) => {
-            const s = SHOWCASE_SLOTS[i];
-            const who = teacherName(m);
-            return (
-              <div key={m.id} className="tp-showcase-item" style={{ top: s.top, left: s.left, animationDelay: s.delay, zIndex: 10 - i, ['--r' as any]: s.r }}>
-                <PLink to={topicPath(m)} preview={ctx.preview} reload={m.kind === 'html'} className="tp-card flex items-center gap-3 p-3 pr-4">
-                  <span className="tp-showcase-icon">{iconFor(m)}</span>
-                  <span className="min-w-0 flex-1">
-                    <span className="tp-h block truncate text-[17px] font-bold">{m.title}</span>
-                    <span className="tp-muted block truncate text-[13px]">
-                      {KIND_LABELS[m.kind][ctx.lang]}
-                      {who && ` · ${who}`}
-                    </span>
+      {items.map((it, i) => {
+        const { r, delay, ...at } = SHOWCASE_SLOTS[i];
+        const style = { ...at, animationDelay: delay, zIndex: 10 - i, ['--r' as any]: r };
+        if (it.kind === 'material') {
+          const m = it.m;
+          const who = teacherName(m);
+          return (
+            <div key={m.id} className="tp-showcase-item" style={style}>
+              <PLink to={topicPath(m)} preview={ctx.preview} reload={m.kind === 'html'} className="tp-card flex items-center gap-3 p-2.5 pr-3.5">
+                <span className="tp-showcase-icon">{iconFor(m)}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="tp-h block truncate text-[16px] font-bold">{m.title}</span>
+                  <span className="tp-muted block truncate text-[13px]">
+                    {KIND_LABELS[m.kind][ctx.lang]}
+                    {who && ` · ${who}`}
                   </span>
-                  {isNew(m.created_at) && <span className="tp-new shrink-0">{bn ? 'নতুন' : 'New'}</span>}
-                </PLink>
-              </div>
-            );
-          })
-        : PLACEHOLDER_ITEMS.map((p, i) => {
-            const s = SHOWCASE_SLOTS[i];
-            return (
-              <div key={p.icon} className="tp-showcase-item" style={{ top: s.top, left: s.left, animationDelay: s.delay, ['--r' as any]: s.r }}>
-                <div className="tp-card flex items-center gap-3 p-3 pr-4">
-                  <span className="tp-showcase-icon">{p.icon}</span>
-                  <span className="tp-h text-[17px] font-bold">{bn ? p.bn : p.en}</span>
-                </div>
-              </div>
-            );
-          })}
+                </span>
+                {isNew(m.created_at) && <span className="tp-new shrink-0">{bn ? 'নতুন' : 'New'}</span>}
+              </PLink>
+            </div>
+          );
+        }
+        if (it.kind === 'teacher') {
+          const t = it.t;
+          return (
+            <div key={t.id} className="tp-showcase-item" style={style}>
+              <button
+                type="button"
+                className="tp-card flex w-full items-center gap-3 p-2.5 pr-3.5 text-left"
+                onClick={(e) => {
+                  setTeacher(t.handle);
+                  scrollToMaterials(e.currentTarget);
+                }}
+              >
+                {t.avatar_url ? (
+                  <img src={t.avatar_url} alt="" className="h-[54px] w-[54px] shrink-0 rounded-full object-cover" style={{ border: '1.5px solid var(--tp-ink)' }} />
+                ) : (
+                  <span className="tp-showcase-icon tp-h rounded-full text-xl font-bold" style={{ color: 'var(--tp-accent)' }}>{(t.name || '?').slice(0, 1).toUpperCase()}</span>
+                )}
+                <span className="min-w-0 flex-1">
+                  <span className="tp-h block truncate text-[16px] font-bold">{t.name}</span>
+                  <span className="tp-muted block truncate text-[13px]">
+                    {t.material_count ? (bn ? `${num(t.material_count, ctx.lang)}টি উপকরণ` : `${t.material_count} materials`) : bn ? 'শিক্ষক · শীঘ্রই আসছে' : 'Teacher · coming soon'}
+                  </span>
+                </span>
+              </button>
+            </div>
+          );
+        }
+        const p = it.p;
+        return (
+          <div key={p.icon} className="tp-showcase-item" style={style}>
+            <div className="tp-card flex items-center gap-3 p-2.5 pr-3.5">
+              <span className="tp-showcase-icon">{p.icon}</span>
+              <span className="min-w-0">
+                <span className="tp-h block text-[16px] font-bold">{bn ? p.bn : p.en}</span>
+                <span className="tp-muted block text-[13px]">{bn ? p.subBn : p.subEn}</span>
+              </span>
+            </div>
+          </div>
+        );
+      })}
 
-      <span className="tp-showcase-pill" style={{ top: '-3%', right: '-1%', zIndex: 30, background: 'var(--tp-primary)', color: 'var(--tp-on-primary)', animationDelay: '-3s', rotate: '4deg' }}>
+      <span className="tp-showcase-pill" style={{ top: '6%', right: '-4%', zIndex: 30, background: 'var(--tp-primary)', color: 'var(--tp-on-primary)', animationDelay: '-3s', rotate: '4deg' }}>
         <span style={{ color: 'var(--tp-accent)' }}>✦</span> {bn ? 'সদ্য যোগ হয়েছে' : 'Just added'}
       </span>
-      {latest.length > 0 && (
-        <a
-          href="#materials"
-          onClick={(e) => {
-            e.preventDefault();
-            (e.currentTarget.ownerDocument.getElementById('materials') as HTMLElement | null)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          }}
-          className="tp-showcase-pill"
-          style={{ bottom: '1%', right: '8%', zIndex: 30, background: 'var(--tp-accent)', color: 'var(--tp-ink)', animationDelay: '-1s' }}
-        >
-          {bn ? 'সব উপকরণ দেখো' : 'See everything'} <ArrowRight className="h-4 w-4" />
-        </a>
-      )}
+      <a
+        href="#materials"
+        onClick={(e) => {
+          e.preventDefault();
+          scrollToMaterials(e.currentTarget);
+        }}
+        className="tp-showcase-pill"
+        style={{ bottom: '2%', left: '4%', zIndex: 30, background: 'var(--tp-accent)', color: 'var(--tp-ink)', animationDelay: '-1s' }}
+      >
+        {bn ? 'সব উপকরণ দেখো' : 'See everything'} <ArrowRight className="h-4 w-4" />
+      </a>
     </div>
   );
 }
@@ -585,7 +689,7 @@ function TeachersBlock({ b, ctx }: { b: Extract<Block, { type: 'teachers' }>; ct
               <span className="min-w-0">
                 <span className="tp-h block truncate text-lg font-bold">{tch.name}</span>
                 <span className="tp-muted block text-sm">
-                  {num(tch.material_count, ctx.lang)} {t(ctx.lang, 'materials_count')}
+                  {tch.material_count ? `${num(tch.material_count, ctx.lang)} ${t(ctx.lang, 'materials_count')}` : ctx.lang === 'bn' ? 'শীঘ্রই আসছে' : 'Coming soon'}
                 </span>
               </span>
             </button>

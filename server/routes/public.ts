@@ -90,7 +90,7 @@ export async function buildSiteData(env: Env): Promise<PublicPageData> {
     siteInfo(env),
   ]);
   const materials = mats.results.map(mapMaterial).map(listMaterial);
-  const teacherList = teachers.results.filter((u) => Number(u.material_count) > 0).map((u) => ({ ...publicTeacher(u), material_count: Number(u.material_count) }));
+  const teacherList = teachers.results.filter((u) => u.role === 'teacher' || Number(u.material_count) > 0).map((u) => ({ ...publicTeacher(u), material_count: Number(u.material_count) }));
   return {
     site,
     teachers: teacherList,
